@@ -1,10 +1,18 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 10;
 
 export default function Home() {
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+  };
+
   // ── Upload form state ────────────────────────────────────────────────────
   const [pdfFile, setPdfFile]           = useState(null);
   const [photoFile, setPhotoFile]       = useState(null);
@@ -70,32 +78,7 @@ export default function Home() {
     reader.onload = ev => setPhotoPreview(ev.target.result);
     reader.readAsDataURL(f);
   };
-const handlePastePhoto = (e) => {
-  const items = e.clipboardData?.items;
-  if (!items) return;
 
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-
-    if (item.type.startsWith('image/')) {
-      const blob = item.getAsFile();
-      if (!blob) return;
-
-      // Create a proper File object
-      const file = new File([blob], `screenshot-${Date.now()}.png`, {
-        type: blob.type,
-      });
-
-      setPhotoFile(file);
-
-      const reader = new FileReader();
-      reader.onload = (ev) => setPhotoPreview(ev.target.result);
-      reader.readAsDataURL(file);
-
-      break;
-    }
-  }
-};
   const handleAadhaarChange = (e) => {
     const val = e.target.value.replace(/\D/g, '').slice(0, 12);
     setAadhaarNo(val);
@@ -156,6 +139,25 @@ const handlePastePhoto = (e) => {
     fetchRecords({ page: newPage });
   };
 
+
+  const handleToggle = async (id, field, currentValue) => {
+    // Optimistic update
+    setRecords(prev => prev.map(r => r._id === id ? { ...r, [field]: !currentValue } : r));
+    try {
+      const res = await fetch('/api/account/toggle', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, field, value: !currentValue }),
+      });
+      if (!res.ok) {
+        // Revert on failure
+        setRecords(prev => prev.map(r => r._id === id ? { ...r, [field]: currentValue } : r));
+      }
+    } catch {
+      setRecords(prev => prev.map(r => r._id === id ? { ...r, [field]: currentValue } : r));
+    }
+  };
+
   const resultFields = [
     { key: 'accountOpenDate', label: 'Account Open Date' },
     { key: 'referenceNo',     label: 'Reference No' },
@@ -180,12 +182,23 @@ const handlePastePhoto = (e) => {
     <div className="max-w-7xl mx-auto px-4 py-8">
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div className="mb-8 flex items-center gap-3">
-        <div className="w-10 h-10 bg-blue-700 rounded-lg flex items-center justify-center text-white font-bold text-lg">P</div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">PNB Form Data Extractor</h1>
-          <p className="text-gray-500 text-sm">Upload FORM-33 → Extract → Save to MongoDB, Google Sheets & Drive</p>
+      <div className="mb-8 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-700 rounded-lg flex items-center justify-center text-white font-bold text-lg">P</div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">PNB Form Data Extractor</h1>
+            <p className="text-gray-500 text-sm">Upload FORM-33 → Extract → Save to MongoDB, Google Sheets & Drive</p>
+          </div>
         </div>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Logout
+        </button>
       </div>
 
       {/* ── Upload Card ───────────────────────────────────────────────────── */}
@@ -265,8 +278,6 @@ const handlePastePhoto = (e) => {
               </label>
               <div className="flex items-center gap-3">
                 <div
-                  tabIndex={0}
-                  onPaste={handlePastePhoto}
                   onClick={() => document.getElementById('photoInput').click()}
                   className="flex-1 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors"
                 >
@@ -457,7 +468,7 @@ const handlePastePhoto = (e) => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b-2 border-gray-200 bg-gray-50">
-                    {['#', 'Open Date', 'Customer Name', 'Account No', 'Customer ID', 'Aadhaar No', 'Mobile No', 'Scheme', 'APY', 'PDF'].map(h => (
+                    {['#', 'Open Date', 'Customer Name', 'Account No', 'Customer ID', 'Aadhaar No', 'Mobile No', 'Scheme', 'APY', 'Unfreeze', 'Passbook', 'Sign', 'PDF'].map(h => (
                       <th key={h} className="text-left py-3 px-3 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -482,6 +493,49 @@ const handlePastePhoto = (e) => {
                           ? <span className="bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">APY</span>
                           : <span className="text-gray-300">—</span>}
                       </td>
+
+                      {/* Unfreeze toggle */}
+                      <td className="py-3 px-3">
+                        <button
+                          onClick={() => handleToggle(rec._id, 'unfreezeStatus', rec.unfreezeStatus)}
+                          className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none
+                            ${rec.unfreezeStatus ? 'bg-green-500' : 'bg-gray-200'}`}
+                          title={rec.unfreezeStatus ? 'Unfreeze: Done' : 'Unfreeze: Pending'}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200
+                            ${rec.unfreezeStatus ? 'translate-x-4' : 'translate-x-0'}`} />
+                        </button>
+                      </td>
+
+                      {/* Passbook toggle */}
+                      <td className="py-3 px-3">
+                        <button
+                          onClick={() => handleToggle(rec._id, 'passbookIssued', rec.passbookIssued)}
+                          className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none
+                            ${rec.passbookIssued ? 'bg-blue-500' : 'bg-gray-200'}`}
+                          title={rec.passbookIssued ? 'Passbook: Issued' : 'Passbook: Pending'}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200
+                            ${rec.passbookIssued ? 'translate-x-4' : 'translate-x-0'}`} />
+                        </button>
+                      </td>
+
+                      {/* Sign button */}
+                      <td className="py-3 px-3">
+                        <button
+                          onClick={() => router.push(`/sign?accountNo=${encodeURIComponent(rec.accountNo)}`)}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors
+                            ${rec.signUrl
+                              ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                              : 'bg-orange-100 text-orange-700 hover:bg-orange-200'}`}
+                        >
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                          {rec.signUrl ? 'View' : 'Upload'}
+                        </button>
+                      </td>
+
                       <td className="py-3 px-3">
                         {rec.pdfDriveUrl
                           ? <a href={rec.pdfDriveUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs font-medium">View ↗</a>
