@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';
+import Cropper from 'react-easy-crop';
 
 function SignPageContent() {
   const searchParams = useSearchParams();
@@ -19,6 +20,12 @@ function SignPageContent() {
   const [success, setSuccess]       = useState(false);
   const [error, setError]           = useState('');
 
+  // crop function 
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [showCropper, setShowCropper] = useState(false);
+
   // Load account info
   useEffect(() => {
     if (!accountNo) { setNotFound(true); setLoading(false); return; }
@@ -32,22 +39,29 @@ function SignPageContent() {
       .finally(() => setLoading(false));
   }, [accountNo]);
 
-  const handleFile = (file) => {
-    if (!file) return;
-    if (!['image/jpeg', 'image/jpg'].includes(file.type)) {
-      setError('Only JPG/JPEG files are allowed');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setError('File size must be under 5MB');
-      return;
-    }
-    setError('');
-    setSignFile(file);
-    const reader = new FileReader();
-    reader.onload = ev => setPreview(ev.target.result);
-    reader.readAsDataURL(file);
+ const handleFile = (file) => {
+  if (!file) return;
+
+  if (!['image/jpeg', 'image/jpg'].includes(file.type)) {
+    setError('Only JPG/JPEG files are allowed');
+    return;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    setError('File size must be under 5MB');
+    return;
+  }
+
+  setError('');
+  setSignFile(file);
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    setPreview(e.target.result);
+    setShowCropper(true);   // 👈 open crop modal
   };
+  reader.readAsDataURL(file);
+};
 
   const onDrop = useCallback((e) => {
     e.preventDefault(); setDragging(false);
@@ -59,7 +73,10 @@ function SignPageContent() {
     setUploading(true); setError('');
     try {
       const fd = new FormData();
-      fd.append('sign', signFile);
+      if (preview) {
+        const blob = await (await fetch(preview)).blob();
+        fd.append('sign', blob, 'signature.jpg');
+      }
       fd.append('accountNo', accountNo);
 
       const res  = await fetch('/api/account/sign', { method: 'POST', body: fd });
@@ -169,7 +186,58 @@ function SignPageContent() {
             </a>
           </div>
         )}
+        {showCropper && (
+  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    <div className="bg-white rounded-2xl p-6 w-[90%] max-w-md">
+      
+      <div className="relative h-64 bg-gray-200 rounded-lg overflow-hidden">
+        <Cropper
+          image={preview}
+          crop={crop}
+          zoom={zoom}
+          aspect={4 / 3}
+          onCropChange={setCrop}
+          onZoomChange={setZoom}
+          onCropComplete={(croppedArea, croppedPixels) =>
+            setCroppedAreaPixels(croppedPixels)
+          }
+        />
+      </div>
 
+      <div className="mt-4">
+        <input
+          type="range"
+          min={1}
+          max={3}
+          step={0.1}
+          value={zoom}
+          onChange={(e) => setZoom(e.target.value)}
+          className="w-full"
+        />
+      </div>
+
+      <div className="flex justify-end gap-3 mt-4">
+        <button
+          onClick={() => setShowCropper(false)}
+          className="px-4 py-2 bg-gray-200 rounded-lg"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={async () => {
+            const croppedImage = await getCroppedImg(preview, croppedAreaPixels);
+            setPreview(croppedImage);
+            setShowCropper(false);
+          }}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+        >
+          Crop & Save
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
         {/* Upload card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-base font-semibold text-gray-800 mb-4">
@@ -250,3 +318,31 @@ export default function SignPage() {
     </Suspense>
   );
 }
+
+const getCroppedImg = (imageSrc, crop) => {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.src = imageSrc;
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = crop.width;
+      canvas.height = crop.height;
+
+      const ctx = canvas.getContext('2d');
+
+      ctx.drawImage(
+        image,
+        crop.x,
+        crop.y,
+        crop.width,
+        crop.height,
+        0,
+        0,
+        crop.width,
+        crop.height
+      );
+
+      resolve(canvas.toDataURL('image/jpeg'));
+    };
+  });
+};

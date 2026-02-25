@@ -175,7 +175,32 @@ export default function Home() {
     { key: 'pdfDriveUrl',     label: 'PDF',     format: v =>
         v ? <a href={v} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs">📁 View PDF</a> : '—' },
   ];
+const handlePastePhoto = (e) => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
 
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+
+    if (item.type.startsWith('image/')) {
+      const blob = item.getAsFile();
+      if (!blob) return;
+
+      // Create a proper File object
+      const file = new File([blob], `screenshot-${Date.now()}.png`, {
+        type: blob.type,
+      });
+
+      setPhotoFile(file);
+
+      const reader = new FileReader();
+      reader.onload = (ev) => setPhotoPreview(ev.target.result);
+      reader.readAsDataURL(file);
+
+      break;
+    }
+  }
+};
   const hasFilters = search || fromDate || toDate;
 
   return (
@@ -278,6 +303,8 @@ export default function Home() {
               </label>
               <div className="flex items-center gap-3">
                 <div
+                tabIndex={0}
+                onPaste={handlePastePhoto}
                   onClick={() => document.getElementById('photoInput').click()}
                   className="flex-1 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors"
                 >
