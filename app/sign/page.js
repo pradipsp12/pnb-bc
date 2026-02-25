@@ -20,11 +20,22 @@ function SignPageContent() {
   const [success, setSuccess]       = useState(false);
   const [error, setError]           = useState('');
 
-  // crop function 
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
+  // crop states
+  const [crop, setCrop]                   = useState({ x: 0, y: 0 });
+  const [zoom, setZoom]                   = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
-  const [showCropper, setShowCropper] = useState(false);
+  const [showCropper, setShowCropper]     = useState(false);
+  const [rotation, setRotation]           = useState(0);
+  const [aspect, setAspect]               = useState(4 / 3); // ✅ dynamic aspect
+
+  const ASPECT_RATIOS = [
+    { label: '4:3',  value: 4 / 3 },
+    { label: '3:4',  value: 3 / 4 },
+    { label: '1:1',  value: 1 },
+    { label: '16:9', value: 16 / 9 },
+    { label: '9:16', value: 9 / 16 },
+    { label: 'Free', value: null },
+  ];
 
   // Load account info
   useEffect(() => {
@@ -39,29 +50,33 @@ function SignPageContent() {
       .finally(() => setLoading(false));
   }, [accountNo]);
 
- const handleFile = (file) => {
-  if (!file) return;
+  const handleFile = (file) => {
+    if (!file) return;
 
-  if (!['image/jpeg', 'image/jpg'].includes(file.type)) {
-    setError('Only JPG/JPEG files are allowed');
-    return;
-  }
+    if (!['image/jpeg', 'image/jpg'].includes(file.type)) {
+      setError('Only JPG/JPEG files are allowed');
+      return;
+    }
 
-  if (file.size > 5 * 1024 * 1024) {
-    setError('File size must be under 5MB');
-    return;
-  }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size must be under 5MB');
+      return;
+    }
 
-  setError('');
-  setSignFile(file);
+    setError('');
+    setSignFile(file);
+    setAspect(4 / 3); // reset aspect on new file
+    setZoom(1);
+    setRotation(0);
+    setCrop({ x: 0, y: 0 });
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    setPreview(e.target.result);
-    setShowCropper(true);   // 👈 open crop modal
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setPreview(e.target.result);
+      setShowCropper(true);
+    };
+    reader.readAsDataURL(file);
   };
-  reader.readAsDataURL(file);
-};
 
   const onDrop = useCallback((e) => {
     e.preventDefault(); setDragging(false);
@@ -153,7 +168,7 @@ function SignPageContent() {
           </div>
         </div>
 
-        {/* Existing sign — show download/view option */}
+        {/* Existing sign */}
         {account?.signUrl && !success && (
           <div className="bg-green-50 border border-green-200 rounded-2xl p-5 mb-5">
             <h3 className="font-semibold text-green-800 mb-3 flex items-center gap-2">
@@ -186,58 +201,111 @@ function SignPageContent() {
             </a>
           </div>
         )}
+
+        {/* ✅ Cropper Modal with dynamic aspect ratio */}
         {showCropper && (
-  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-    <div className="bg-white rounded-2xl p-6 w-[90%] max-w-md">
-      
-      <div className="relative h-64 bg-gray-200 rounded-lg overflow-hidden">
-        <Cropper
-          image={preview}
-          crop={crop}
-          zoom={zoom}
-          aspect={4 / 3}
-          onCropChange={setCrop}
-          onZoomChange={setZoom}
-          onCropComplete={(croppedArea, croppedPixels) =>
-            setCroppedAreaPixels(croppedPixels)
-          }
-        />
-      </div>
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-6 w-[90%] max-w-md">
 
-      <div className="mt-4">
-        <input
-          type="range"
-          min={1}
-          max={3}
-          step={0.1}
-          value={zoom}
-          onChange={(e) => setZoom(e.target.value)}
-          className="w-full"
-        />
-      </div>
+              <h3 className="text-base font-semibold text-gray-800 mb-3">Crop Signature</h3>
 
-      <div className="flex justify-end gap-3 mt-4">
-        <button
-          onClick={() => setShowCropper(false)}
-          className="px-4 py-2 bg-gray-200 rounded-lg"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={async () => {
-            const croppedImage = await getCroppedImg(preview, croppedAreaPixels);
-            setPreview(croppedImage);
-            setShowCropper(false);
-          }}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg"
-        >
-          Crop & Save
-        </button>
-      </div>
+              {/* Crop area */}
+              <div className="relative h-64 bg-gray-200 rounded-lg overflow-hidden">
+                <Cropper
+                  image={preview}
+                  crop={crop}
+                  zoom={zoom}
+                  rotation={rotation}
+                  aspect={aspect}             // ✅ dynamic
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onRotationChange={setRotation}
+                  onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels)}
+                />
+              </div>
 
-    </div>
-  </div>
-)}
+              {/* ✅ Aspect Ratio Selector */}
+              <div className="mt-4">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 block">
+                  Aspect Ratio
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {ASPECT_RATIOS.map(({ label, value }) => (
+                    <button
+                      key={label}
+                      onClick={() => setAspect(value)}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors
+                        ${aspect === value
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-gray-100 text-gray-700 border-gray-200 hover:border-blue-400 hover:bg-blue-50'
+                        }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Zoom */}
+              <div className="mt-4">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
+                  Zoom
+                </label>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="w-full accent-blue-600"
+                />
+              </div>
+
+              {/* Rotate */}
+              <div className="mt-3">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
+                  Rotate — {rotation}°
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={360}
+                  step={1}
+                  value={rotation}
+                  onChange={(e) => setRotation(Number(e.target.value))}
+                  className="w-full accent-blue-600"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 mt-5">
+                <button
+                  onClick={() => {
+                    setShowCropper(false);
+                    setSignFile(null);
+                    setPreview(null);
+                  }}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    const croppedImage = await getCroppedImg(preview, croppedAreaPixels, rotation);
+                    setPreview(croppedImage);
+                    setShowCropper(false);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                >
+                  Crop & Save
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
         {/* Upload card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-base font-semibold text-gray-800 mb-4">
@@ -270,6 +338,16 @@ function SignPageContent() {
               </div>
             )}
           </div>
+
+          {/* Re-crop button — shown after crop is done */}
+          {preview && !showCropper && signFile && (
+            <button
+              onClick={() => setShowCropper(true)}
+              className="text-xs text-blue-500 hover:text-blue-700 mb-2 block font-medium"
+            >
+              ✂️ Re-crop
+            </button>
+          )}
 
           {/* Remove preview */}
           {signFile && (
@@ -319,28 +397,41 @@ export default function SignPage() {
   );
 }
 
-const getCroppedImg = (imageSrc, crop) => {
+const getCroppedImg = (imageSrc, pixelCrop, rotation = 0) => {
   return new Promise((resolve) => {
     const image = new Image();
     image.src = imageSrc;
+
     image.onload = () => {
       const canvas = document.createElement('canvas');
-      canvas.width = crop.width;
-      canvas.height = crop.height;
-
       const ctx = canvas.getContext('2d');
 
-      ctx.drawImage(
-        image,
-        crop.x,
-        crop.y,
-        crop.width,
-        crop.height,
-        0,
-        0,
-        crop.width,
-        crop.height
+      const radians = (rotation * Math.PI) / 180;
+
+      const maxSize = Math.max(image.width, image.height);
+      const safeArea = 2 * ((maxSize / 2) * Math.sqrt(2));
+
+      canvas.width = safeArea;
+      canvas.height = safeArea;
+
+      ctx.translate(safeArea / 2, safeArea / 2);
+      ctx.rotate(radians);
+      ctx.translate(-image.width / 2, -image.height / 2);
+      ctx.drawImage(image, 0, 0);
+
+      const offsetX = (safeArea - image.width) / 2;
+      const offsetY = (safeArea - image.height) / 2;
+
+      const data = ctx.getImageData(
+        pixelCrop.x + offsetX,
+        pixelCrop.y + offsetY,
+        pixelCrop.width,
+        pixelCrop.height
       );
+
+      canvas.width = pixelCrop.width;
+      canvas.height = pixelCrop.height;
+      ctx.putImageData(data, 0, 0);
 
       resolve(canvas.toDataURL('image/jpeg'));
     };
