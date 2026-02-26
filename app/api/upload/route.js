@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Account from '@/lib/models/Account';
+import Customer from '@/lib/models/Customer'; 
 import { extractAccountData } from '@/lib/pdfParser';
 import { appendToGoogleSheet, uploadPdfToDrive } from '@/lib/googleSheets';
 
@@ -71,6 +72,28 @@ export async function POST(request) {
 
     const savedAccount = await account.save();
     console.log('Saved to MongoDB:', savedAccount._id);
+
+        // ── Save to Customer collection (new) ─────────────────────────────────────
+    let savedCustomer = null;
+    let customerError = null;
+    try {
+      savedCustomer = await Customer.create({
+        customerName: extractedData.customerName,
+        accountNo:    extractedData.accountNo,
+        adharNo:      aadhaarNo,                         // real 12-digit aadhaar
+        mobileNo:     extractedData.mobileNo || null,
+        scheme:       scheme,
+        apy:          apy,               // bool → 'Yes'/'No' enum
+      });
+      console.log('Saved to Customer collection:', savedCustomer._id);
+    } catch (err) {
+      // Don't fail the whole request if customer save fails
+      // (e.g. duplicate accountNo if re-uploaded)
+      customerError = err.code === 11000
+        ? 'Customer record already exists for this account number'
+        : err.message;
+      console.error('Customer collection save error:', customerError);
+    }
 
     // Append to Google Sheets
     let sheetsResult = null, sheetsError = null;

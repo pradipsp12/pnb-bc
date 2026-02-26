@@ -1,98 +1,191 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
-const PAGE_SIZE = 10;
+const SCHEMES    = ['PMSBY', 'PMJJBY'];
+const PAGE_SIZES = [10, 25, 50, 100];
+
+function Toast({ toasts }) {
+  return (
+    <div className="fixed bottom-4 right-4 z-[60] space-y-2 pointer-events-none">
+      {toasts.map(t => (
+        <div key={t.id}
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-white text-sm font-medium min-w-[220px]
+            ${t.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+          {t.type === 'success' ? '✅' : '❌'} {t.message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Reusable 3-state cycle button: All → Yes → No → All ──────────────────────
+// values: '' | trueVal | falseVal
+function CycleFilter({ value, onChange, allLabel, trueVal, trueLabel, falseVal, falseLabel, trueColor, falseColor }) {
+  const cycle = () => {
+    if (value === '')        onChange(trueVal);
+    else if (value === trueVal)  onChange(falseVal);
+    else                         onChange('');
+  };
+  const base = 'px-3 py-2 rounded-xl border text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer';
+  if (value === trueVal)  return <button onClick={cycle} className={`${base} ${trueColor}`}>{trueLabel}</button>;
+  if (value === falseVal) return <button onClick={cycle} className={`${base} ${falseColor}`}>{falseLabel}</button>;
+  return <button onClick={cycle} className={`${base} border-gray-200 bg-white text-gray-500 hover:border-gray-300`}>{allLabel}</button>;
+}
 
 export default function Home() {
   const router = useRouter();
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/login');
-  };
-
-  // ── Upload form state ────────────────────────────────────────────────────
-  const [pdfFile, setPdfFile]           = useState(null);
-  const [photoFile, setPhotoFile]       = useState(null);
+  // ── Upload state ──────────────────────────────────────────────────────────
+  const [pdfFile,      setPdfFile]      = useState(null);
+  const [photoFile,    setPhotoFile]    = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
-  const [scheme, setScheme]             = useState('');
-  const [apy, setApy]                   = useState(false);
-  const [aadhaarNo, setAadhaarNo]       = useState('');
+  const [scheme,       setScheme]       = useState('');
+  const [apy,          setApy]          = useState(false);
+  const [aadhaarNo,    setAadhaarNo]    = useState('');
   const [aadhaarError, setAadhaarError] = useState('');
-  const [dragging, setDragging]         = useState(false);
-  const [uploading, setUploading]       = useState(false);
-  const [result, setResult]             = useState(null);
-  const [error, setError]               = useState(null);
+  const [dragging,     setDragging]     = useState(false);
+  const [uploading,    setUploading]    = useState(false);
+  const [result,       setResult]       = useState(null);
+  const [uploadError,  setUploadError]  = useState(null);
 
-  // ── Table state ──────────────────────────────────────────────────────────
-  const [records, setRecords]           = useState([]);
-  const [loadingRecords, setLoadingRecords] = useState(false);
-  const [search, setSearch]             = useState('');
-  const [searchInput, setSearchInput]   = useState('');
-  const [fromDate, setFromDate]         = useState('');
-  const [toDate, setToDate]             = useState('');
-  const [page, setPage]                 = useState(1);
-  const [pagination, setPagination]     = useState({ total: 0, totalPages: 1 });
+  // ── Table state ───────────────────────────────────────────────────────────
+  const [records,        setRecords]        = useState([]);
+  const [loadingData,    setLoadingData]    = useState(true);
+  const [pagination,     setPagination]     = useState({ total: 0, page: 1, limit: 10, totalPages: 1 });
+  const [page,           setPage]           = useState(1);
+  const [limit,          setLimit]          = useState(10);
+  const [searchInput,    setSearchInput]    = useState('');
+  const [search,         setSearch]         = useState('');
+  const [fromDate,       setFromDate]       = useState('');
+  const [toDate,         setToDate]         = useState('');
+  const [schemeFilter,   setSchemeFilter]   = useState('');
+  const [apyFilter,      setApyFilter]      = useState('');
+  const [unfreezeFilter, setUnfreezeFilter] = useState(''); // '' | 'done' | 'pending'
+  const [passbookFilter, setPassbookFilter] = useState(''); // '' | 'issued' | 'pending'
+  const [exporting,      setExporting]      = useState('');
+  const [toasts,         setToasts]         = useState([]);
 
-  // ── Fetch records ────────────────────────────────────────────────────────
-  const fetchRecords = async (opts = {}) => {
-    setLoadingRecords(true);
+  const searchTimer = useRef(null);
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  const toast = useCallback((message, type = 'success') => {
+    const id = Date.now();
+    setToasts(p => [...p, { id, message, type }]);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3500);
+  }, []);
+
+  // ── Fetch records ─────────────────────────────────────────────────────────
+  const fetchRecords = useCallback(async (overrides = {}) => {
+    setLoadingData(true);
     try {
-      const p      = opts.page     ?? page;
-      const s      = opts.search   ?? search;
-      const from   = opts.fromDate ?? fromDate;
-      const to     = opts.toDate   ?? toDate;
-
-      const params = new URLSearchParams({ page: p });
-      if (s)    params.set('search', s);
-      if (from) params.set('fromDate', from);
-      if (to)   params.set('toDate', to);
-
-      const res  = await fetch(`/api/records?${params}`);
+      const q = new URLSearchParams({
+        page:      overrides.page      ?? page,
+        limit:     overrides.limit     ?? limit,
+        search:    overrides.search    !== undefined ? overrides.search    : search,
+        fromDate:  overrides.fromDate  !== undefined ? overrides.fromDate  : fromDate,
+        toDate:    overrides.toDate    !== undefined ? overrides.toDate    : toDate,
+        scheme:    overrides.scheme    !== undefined ? overrides.scheme    : schemeFilter,
+        apy:       overrides.apy       !== undefined ? overrides.apy       : apyFilter,
+        unfreeze:  overrides.unfreeze  !== undefined ? overrides.unfreeze  : unfreezeFilter,
+        passbook:  overrides.passbook  !== undefined ? overrides.passbook  : passbookFilter,
+      });
+      const res  = await fetch(`/api/records?${q}`);
       const data = await res.json();
-      if (data.success) {
-        setRecords(data.records);
-        setPagination(data.pagination);
-      }
-    } catch { console.error('Failed to load records'); }
-    finally  { setLoadingRecords(false); }
+      if (data.success) { setRecords(data.records); setPagination(data.pagination); }
+    } catch { toast('Failed to load records', 'error'); }
+    finally  { setLoadingData(false); }
+  }, [page, limit, search, fromDate, toDate, schemeFilter, apyFilter, unfreezeFilter, passbookFilter, toast]);
+
+  useEffect(() => { fetchRecords(); }, [page, limit, schemeFilter, apyFilter, unfreezeFilter, passbookFilter]);
+
+  // ── Search debounced ──────────────────────────────────────────────────────
+  const handleSearchInput = (val) => {
+    setSearchInput(val);
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setSearch(val); setPage(1);
+      fetchRecords({ search: val, page: 1 });
+    }, 400);
   };
 
-  useEffect(() => { fetchRecords(); }, []);
+  // ── Date filter ───────────────────────────────────────────────────────────
+  const applyDateFilter = () => { setPage(1); fetchRecords({ fromDate, toDate, page: 1 }); };
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
+  // ── Clear all filters ─────────────────────────────────────────────────────
+  const clearFilters = () => {
+    setSearchInput(''); setSearch('');
+    setFromDate('');    setToDate('');
+    setSchemeFilter(''); setApyFilter('');
+    setUnfreezeFilter(''); setPassbookFilter('');
+    setPage(1);
+    fetchRecords({ search: '', fromDate: '', toDate: '', scheme: '', apy: '', unfreeze: '', passbook: '', page: 1 });
+  };
+
+  const hasFilters = search || fromDate || toDate || schemeFilter || apyFilter || unfreezeFilter || passbookFilter;
+
+  // ── Export ────────────────────────────────────────────────────────────────
+  const handleExport = async (format) => {
+    setExporting(format);
+    try {
+      const q = new URLSearchParams({ format, search, fromDate, toDate, scheme: schemeFilter, apy: apyFilter, unfreeze: unfreezeFilter, passbook: passbookFilter });
+      const res = await fetch(`/api/records/export?${q}`);
+      if (!res.ok) { toast('Export failed', 'error'); return; }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `records_${Date.now()}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast(`Exported as ${format.toUpperCase()} successfully!`);
+    } catch { toast('Export failed', 'error'); }
+    finally { setExporting(''); }
+  };
+
+  // ── Upload handlers ───────────────────────────────────────────────────────
   const onDrop = useCallback((e) => {
     e.preventDefault(); setDragging(false);
     const f = e.dataTransfer.files[0];
-    if (f?.type === 'application/pdf') { setPdfFile(f); setError(null); setResult(null); }
-    else setError('Please drop a PDF file.');
+    if (f?.type === 'application/pdf') { setPdfFile(f); setUploadError(null); setResult(null); }
+    else setUploadError('Please drop a PDF file.');
   }, []);
 
   const handlePhotoChange = (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
+    const f = e.target.files?.[0]; if (!f) return;
     setPhotoFile(f);
     const reader = new FileReader();
     reader.onload = ev => setPhotoPreview(ev.target.result);
     reader.readAsDataURL(f);
   };
 
+  const handlePastePhoto = (e) => {
+    const items = e.clipboardData?.items; if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const blob = items[i].getAsFile(); if (!blob) return;
+        const file = new File([blob], `screenshot-${Date.now()}.png`, { type: blob.type });
+        setPhotoFile(file);
+        const reader = new FileReader();
+        reader.onload = ev => setPhotoPreview(ev.target.result);
+        reader.readAsDataURL(file);
+        break;
+      }
+    }
+  };
+
   const handleAadhaarChange = (e) => {
     const val = e.target.value.replace(/\D/g, '').slice(0, 12);
     setAadhaarNo(val);
-    if (val && val.length !== 12) setAadhaarError('Aadhaar must be exactly 12 digits');
-    else setAadhaarError('');
+    setAadhaarError(val && val.length !== 12 ? 'Aadhaar must be exactly 12 digits' : '');
   };
 
   const handleUpload = async () => {
     if (!pdfFile) return;
-    if (!aadhaarNo || aadhaarNo.length !== 12) {
-      setAadhaarError('Aadhaar must be exactly 12 digits');
-      return;
-    }
-    setUploading(true); setError(null); setResult(null);
+    if (!aadhaarNo || aadhaarNo.length !== 12) { setAadhaarError('Aadhaar must be exactly 12 digits'); return; }
+    setUploading(true); setUploadError(null); setResult(null);
     try {
       const fd = new FormData();
       fd.append('pdf', pdfFile);
@@ -100,62 +193,36 @@ export default function Home() {
       fd.append('scheme', scheme);
       fd.append('apy', String(apy));
       fd.append('aadhaarNo', aadhaarNo);
-
       const res  = await fetch('/api/upload', { method: 'POST', body: fd });
       const data = await res.json();
-
-      if (!res.ok) { setError(data.error || 'Upload failed'); }
+      if (!res.ok) { setUploadError(data.error || 'Upload failed'); }
       else {
         setResult(data);
         setPdfFile(null); setPhotoFile(null); setPhotoPreview(null);
         setScheme(''); setApy(false); setAadhaarNo('');
-        fetchRecords({ page: 1 });
-        setPage(1);
+        setPage(1); fetchRecords({ page: 1 });
+        toast('Data saved successfully!');
       }
-    } catch (err) { setError('Network error: ' + err.message); }
+    } catch (err) { setUploadError('Network error: ' + err.message); }
     finally { setUploading(false); }
   };
 
-  const handleSearch = () => {
-    setSearch(searchInput);
-    setPage(1);
-    fetchRecords({ search: searchInput, page: 1, fromDate, toDate });
-  };
-
-  const handleDateFilter = () => {
-    setPage(1);
-    fetchRecords({ search, page: 1, fromDate, toDate });
-  };
-
-  const handleClearFilters = () => {
-    setSearchInput(''); setSearch('');
-    setFromDate(''); setToDate('');
-    setPage(1);
-    fetchRecords({ search: '', page: 1, fromDate: '', toDate: '' });
-  };
-
-  const handlePageChange = (newPage) => {
-    setPage(newPage);
-    fetchRecords({ page: newPage });
-  };
-
-
   const handleToggle = async (id, field, currentValue) => {
-    // Optimistic update
     setRecords(prev => prev.map(r => r._id === id ? { ...r, [field]: !currentValue } : r));
     try {
       const res = await fetch('/api/account/toggle', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, field, value: !currentValue }),
       });
-      if (!res.ok) {
-        // Revert on failure
-        setRecords(prev => prev.map(r => r._id === id ? { ...r, [field]: currentValue } : r));
-      }
+      if (!res.ok) setRecords(prev => prev.map(r => r._id === id ? { ...r, [field]: currentValue } : r));
     } catch {
       setRecords(prev => prev.map(r => r._id === id ? { ...r, [field]: currentValue } : r));
     }
+  };
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
   };
 
   const resultFields = [
@@ -175,66 +242,39 @@ export default function Home() {
     { key: 'pdfDriveUrl',     label: 'PDF',     format: v =>
         v ? <a href={v} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs">📁 View PDF</a> : '—' },
   ];
-const handlePastePhoto = (e) => {
-  const items = e.clipboardData?.items;
-  if (!items) return;
-
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-
-    if (item.type.startsWith('image/')) {
-      const blob = item.getAsFile();
-      if (!blob) return;
-
-      // Create a proper File object
-      const file = new File([blob], `screenshot-${Date.now()}.png`, {
-        type: blob.type,
-      });
-
-      setPhotoFile(file);
-
-      const reader = new FileReader();
-      reader.onload = (ev) => setPhotoPreview(ev.target.result);
-      reader.readAsDataURL(file);
-
-      break;
-    }
-  }
-};
-  const hasFilters = search || fromDate || toDate;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
 
-      {/* ── Header ────────────────────────────────────────────────────────── */}
+      {/* ── Header ── */}
       <div className="mb-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-700 rounded-lg flex items-center justify-center text-white font-bold text-lg">P</div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">PNB Form Data Extractor</h1>
-            <p className="text-gray-500 text-sm">Upload FORM-33 → Extract → Save to MongoDB, Google Sheets & Drive</p>
+            <p className="text-gray-500 text-sm">Upload FORM → Extract → Save to MongoDB, Google Sheets & Drive</p>
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          Logout
-        </button>
+        <div className="flex gap-3">
+          <Link href="/customers"
+            className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition-colors shadow-sm">
+            My Customers
+          </Link>
+          <button onClick={handleLogout}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Logout
+          </button>
+        </div>
       </div>
 
-      {/* ── Upload Card ───────────────────────────────────────────────────── */}
+      {/* ── Upload Card ── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
         <h2 className="text-lg font-semibold text-gray-800 mb-5">Upload Form</h2>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-          {/* Left: PDF + Aadhaar */}
           <div className="flex flex-col gap-4">
-            {/* PDF drop zone */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 📄 Account Opening Form (PDF) <span className="text-red-500">*</span>
@@ -248,7 +288,7 @@ const handlePastePhoto = (e) => {
                   ${dragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'}`}
               >
                 <input id="pdfInput" type="file" accept="application/pdf" className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) { setPdfFile(f); setError(null); setResult(null); } }} />
+                  onChange={e => { const f = e.target.files?.[0]; if (f) { setPdfFile(f); setUploadError(null); setResult(null); } }} />
                 <div className="text-4xl mb-2">📄</div>
                 {pdfFile ? (
                   <div>
@@ -265,60 +305,45 @@ const handlePastePhoto = (e) => {
               {pdfFile && <button onClick={() => setPdfFile(null)} className="mt-1 text-xs text-red-400 hover:text-red-600">✕ Remove PDF</button>}
             </div>
 
-            {/* Aadhaar input — mandatory */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 🪪 Aadhaar Number <span className="text-red-500">*</span>
                 <span className="text-gray-400 font-normal text-xs ml-1">(12 digits, mandatory)</span>
               </label>
               <input
-                type="text"
-                inputMode="numeric"
-                value={aadhaarNo}
-                onChange={handleAadhaarChange}
-                placeholder="Enter 12-digit Aadhaar number"
-                maxLength={12}
+                type="text" inputMode="numeric"
+                value={aadhaarNo} onChange={handleAadhaarChange}
+                placeholder="Enter 12-digit Aadhaar number" maxLength={12}
                 className={`w-full border rounded-xl px-4 py-2.5 text-sm font-mono tracking-widest focus:outline-none focus:ring-2
                   ${aadhaarError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-blue-500'}`}
               />
               <div className="flex items-center justify-between mt-1">
                 {aadhaarError
                   ? <p className="text-red-500 text-xs">{aadhaarError}</p>
-                  : <p className="text-gray-400 text-xs">This will be saved as the actual Aadhaar number</p>
-                }
-                <p className={`text-xs font-mono ${aadhaarNo.length === 12 ? 'text-green-600' : 'text-gray-400'}`}>
-                  {aadhaarNo.length}/12
-                </p>
+                  : <p className="text-gray-400 text-xs">This will be saved as the actual Aadhaar number</p>}
+                <p className={`text-xs font-mono ${aadhaarNo.length === 12 ? 'text-green-600' : 'text-gray-400'}`}>{aadhaarNo.length}/12</p>
               </div>
             </div>
           </div>
 
-          {/* Right: Photo + Scheme + APY */}
           <div className="flex flex-col gap-4">
-
-            {/* Photo Upload */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 🖼️ Customer Photo <span className="text-gray-400 text-xs">(Optional)</span>
               </label>
               <div className="flex items-center gap-3">
-                <div
-                tabIndex={0}
-                onPaste={handlePastePhoto}
+                <div tabIndex={0} onPaste={handlePastePhoto}
                   onClick={() => document.getElementById('photoInput').click()}
-                  className="flex-1 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors"
-                >
+                  className="flex-1 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors">
                   <input id="photoInput" type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
                   {photoPreview
                     ? <img src={photoPreview} alt="Preview" className="h-20 w-20 object-cover rounded-lg mx-auto" />
-                    : <div><div className="text-3xl mb-1">👤</div><p className="text-gray-400 text-xs">Click to upload photo</p></div>
-                  }
+                    : <div><div className="text-3xl mb-1">👤</div><p className="text-gray-400 text-xs">Click to upload or paste photo</p></div>}
                 </div>
                 {photoFile && <button onClick={() => { setPhotoFile(null); setPhotoPreview(null); }} className="text-xs text-red-400 hover:text-red-600">✕</button>}
               </div>
             </div>
 
-            {/* Scheme */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 📋 Scheme <span className="text-gray-400 text-xs">(Optional)</span>
@@ -331,7 +356,6 @@ const handlePastePhoto = (e) => {
               </select>
             </div>
 
-            {/* APY */}
             <div>
               <label className="flex items-center gap-3 cursor-pointer group">
                 <div className="relative">
@@ -346,11 +370,9 @@ const handlePastePhoto = (e) => {
                 <span className="text-sm font-medium text-gray-700">APY <span className="text-gray-400 text-xs font-normal">(Atal Pension Yojana)</span></span>
               </label>
             </div>
-
           </div>
         </div>
 
-        {/* Submit */}
         <button onClick={handleUpload} disabled={!pdfFile || uploading}
           className={`mt-6 w-full py-3 rounded-xl font-semibold text-white transition-colors
             ${!pdfFile || uploading ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'}`}>
@@ -366,17 +388,16 @@ const handlePastePhoto = (e) => {
         </button>
       </div>
 
-      {/* ── Error ─────────────────────────────────────────────────────────── */}
-      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-red-700 text-sm">❌ {error}</div>}
+      {uploadError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-red-700 text-sm">❌ {uploadError}</div>
+      )}
 
-      {/* ── Result ────────────────────────────────────────────────────────── */}
       {result && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
           <h2 className="text-lg font-semibold text-green-700 mb-4">✅ Data Saved Successfully</h2>
-
           <div className="flex flex-wrap gap-3 mb-5">
             {[
-              { label: '🗄️ MongoDB', ok: result.mongodb?.saved, msg: result.mongodb?.saved ? 'Saved' : 'Failed' },
+              { label: '🗄️ MongoDB', ok: result.mongodb?.saved,     msg: result.mongodb?.saved ? 'Saved' : 'Failed' },
               { label: '📊 Sheets',  ok: result.googleSheets?.saved, msg: result.googleSheets?.saved ? 'Row added' : `Failed: ${result.googleSheets?.error}` },
               { label: '📁 Drive',   ok: !!result.data?.pdfDriveUrl,
                 msg: result.data?.pdfDriveUrl
@@ -389,7 +410,6 @@ const handlePastePhoto = (e) => {
               </div>
             ))}
           </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {resultFields.map(({ key, label, format }) => (
               <div key={key} className="bg-gray-50 rounded-lg p-3">
@@ -403,91 +423,145 @@ const handlePastePhoto = (e) => {
         </div>
       )}
 
-      {/* ── Records Table ─────────────────────────────────────────────────── */}
+      {/* ── Records Table ── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
 
-        {/* Table Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-800">Saved Records</h2>
             <p className="text-sm text-gray-400 mt-0.5">
-              {pagination.total} total account{pagination.total !== 1 ? 's' : ''}
-              {hasFilters && ' (filtered)'}
+              {loadingData ? 'Loading...' : `${pagination.total} record${pagination.total !== 1 ? 's' : ''}${hasFilters ? ' (filtered)' : ''}`}
             </p>
           </div>
-          <button onClick={() => fetchRecords()} className="text-blue-600 text-sm hover:underline">🔄 Refresh</button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => handleExport('excel')} disabled={!!exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-green-700 text-xs font-semibold hover:bg-green-100 disabled:opacity-50">
+              {exporting === 'excel'
+                ? <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                : '📊'} Excel
+            </button>
+            <button onClick={() => handleExport('pdf')} disabled={!!exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100 disabled:opacity-50">
+              {exporting === 'pdf'
+                ? <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                : '📄'} PDF
+            </button>
+            <button onClick={() => fetchRecords()}
+              className="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 bg-blue-50 rounded-lg hover:bg-blue-100 font-semibold">
+              🔄 Refresh
+            </button>
+          </div>
         </div>
 
         {/* ── Filters ── */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-5">
+        <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3">
 
-          {/* Search box */}
-          <div className="flex-1 flex gap-2">
+          {/* Row 1: Search */}
+          <div className="relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
             <input
-              type="text"
-              value={searchInput}
-              onChange={e => setSearchInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              placeholder="Search by name, account no, mobile, Aadhaar..."
-              className="flex-1 border border-gray-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              type="text" value={searchInput}
+              onChange={e => handleSearchInput(e.target.value)}
+              placeholder="Search by name, account, mobile, Aadhaar, reference..."
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
             />
-            <button onClick={handleSearch}
-              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700 font-medium whitespace-nowrap">
-              🔍 Search
-            </button>
           </div>
 
-          {/* Date range filter */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="flex items-center gap-1.5 border border-gray-300 rounded-xl px-3 py-2 bg-white">
-              <span className="text-gray-400 text-xs whitespace-nowrap">From</span>
-              <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
-                className="text-sm text-gray-700 focus:outline-none bg-transparent" />
-            </div>
-            <span className="text-gray-400 text-xs">—</span>
-            <div className="flex items-center gap-1.5 border border-gray-300 rounded-xl px-3 py-2 bg-white">
-              <span className="text-gray-400 text-xs whitespace-nowrap">To</span>
-              <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-                className="text-sm text-gray-700 focus:outline-none bg-transparent" />
-            </div>
-            <button onClick={handleDateFilter}
-              className="px-3 py-2 bg-gray-700 text-white text-sm rounded-xl hover:bg-gray-800 font-medium whitespace-nowrap">
-              Filter
-            </button>
+          {/* Row 2: Scheme + APY + Unfreeze + Passbook */}
+          <div className="flex flex-wrap gap-2">
+            {/* Scheme */}
+            <select value={schemeFilter}
+              onChange={e => { setSchemeFilter(e.target.value); setPage(1); fetchRecords({ scheme: e.target.value, page: 1 }); }}
+              className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-semibold text-gray-600 focus:border-blue-500 outline-none">
+              <option value="">All Schemes</option>
+              {SCHEMES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+
+            {/* APY cycle: All → Yes → No */}
+            <CycleFilter
+              value={apyFilter}
+              onChange={v => { setApyFilter(v); setPage(1); fetchRecords({ apy: v, page: 1 }); }}
+              allLabel="All APY"
+              trueVal="Yes"  trueLabel="APY: Yes"  trueColor="border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
+              falseVal="No"  falseLabel="APY: No"   falseColor="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+            />
+
+            {/* Unfreeze cycle: All → Done → Pending */}
+            <CycleFilter
+              value={unfreezeFilter}
+              onChange={v => { setUnfreezeFilter(v); setPage(1); fetchRecords({ unfreeze: v, page: 1 }); }}
+              allLabel="All Unfreeze"
+              trueVal="done"     trueLabel="✅ Unfrozen"   trueColor="border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
+              falseVal="pending" falseLabel="⏳ Freeze Pending" falseColor="border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100"
+            />
+
+            {/* Passbook cycle: All → Issued → Pending */}
+            <CycleFilter
+              value={passbookFilter}
+              onChange={v => { setPassbookFilter(v); setPage(1); fetchRecords({ passbook: v, page: 1 }); }}
+              allLabel="All Passbook"
+              trueVal="issued"   trueLabel="📗 Issued"        trueColor="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+              falseVal="pending" falseLabel="📘 PB Pending"   falseColor="border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100"
+            />
           </div>
 
-          {/* Clear */}
+          {/* Row 3: Date range */}
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="flex items-center gap-2 flex-1">
+              <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-white flex-1">
+                <span className="text-gray-400 text-xs whitespace-nowrap">From</span>
+                <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+                  className="text-sm text-gray-700 focus:outline-none bg-transparent flex-1" />
+              </div>
+              <span className="text-gray-400 text-xs">—</span>
+              <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-white flex-1">
+                <span className="text-gray-400 text-xs whitespace-nowrap">To</span>
+                <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+                  className="text-sm text-gray-700 focus:outline-none bg-transparent flex-1" />
+              </div>
+              <button onClick={applyDateFilter}
+                className="px-4 py-2 bg-gray-700 text-white text-sm rounded-xl hover:bg-gray-800 font-medium whitespace-nowrap">
+                Apply
+              </button>
+            </div>
+            {hasFilters && (
+              <button onClick={clearFilters}
+                className="px-3 py-2 border border-red-200 text-red-600 bg-red-50 text-sm rounded-xl hover:bg-red-100 whitespace-nowrap font-medium">
+                ✕ Clear All
+              </button>
+            )}
+          </div>
+
+          {/* Active filter badges */}
           {hasFilters && (
-            <button onClick={handleClearFilters}
-              className="px-3 py-2 border border-gray-300 text-gray-600 text-sm rounded-xl hover:bg-gray-50 whitespace-nowrap">
-              ✕ Clear
-            </button>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {search         && <span className="bg-blue-50   text-blue-700   border border-blue-200   text-xs px-3 py-1 rounded-full">🔍 "{search}"</span>}
+              {schemeFilter   && <span className="bg-green-50  text-green-700  border border-green-200  text-xs px-3 py-1 rounded-full">📋 {schemeFilter}</span>}
+              {apyFilter      && <span className="bg-purple-50 text-purple-700 border border-purple-200 text-xs px-3 py-1 rounded-full">APY: {apyFilter}</span>}
+              {unfreezeFilter && <span className="bg-green-50  text-green-700  border border-green-200  text-xs px-3 py-1 rounded-full">🔓 Unfreeze: {unfreezeFilter}</span>}
+              {passbookFilter && <span className="bg-blue-50   text-blue-700   border border-blue-200   text-xs px-3 py-1 rounded-full">📗 Passbook: {passbookFilter}</span>}
+              {fromDate       && <span className="bg-orange-50 text-orange-700 border border-orange-200 text-xs px-3 py-1 rounded-full">📅 From: {fromDate}</span>}
+              {toDate         && <span className="bg-orange-50 text-orange-700 border border-orange-200 text-xs px-3 py-1 rounded-full">📅 To: {toDate}</span>}
+            </div>
           )}
         </div>
 
-        {/* Active filter summary */}
-        {hasFilters && (
-          <div className="mb-4 flex flex-wrap gap-2">
-            {search && <span className="bg-blue-50 text-blue-700 border border-blue-200 text-xs px-3 py-1 rounded-full">🔍 "{search}"</span>}
-            {fromDate && <span className="bg-purple-50 text-purple-700 border border-purple-200 text-xs px-3 py-1 rounded-full">📅 From: {fromDate}</span>}
-            {toDate   && <span className="bg-purple-50 text-purple-700 border border-purple-200 text-xs px-3 py-1 rounded-full">📅 To: {toDate}</span>}
-          </div>
-        )}
-
-        {/* Table */}
-        {loadingRecords ? (
-          <div className="text-center py-12 text-gray-400">
+        {/* ── Table ── */}
+        {loadingData ? (
+          <div className="text-center py-12">
             <svg className="animate-spin h-8 w-8 mx-auto mb-3 text-blue-500" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
             </svg>
-            Loading records...
+            <p className="text-gray-400 text-sm">Loading records...</p>
           </div>
         ) : records.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
             <div className="text-5xl mb-3">📂</div>
             <p className="font-medium">{hasFilters ? 'No records match your filters' : 'No records yet'}</p>
-            <p className="text-sm mt-1">{hasFilters ? 'Try adjusting your search or date range' : 'Upload a PDF to get started'}</p>
+            <p className="text-sm mt-1">{hasFilters ? 'Try adjusting your search or filters' : 'Upload a PDF to get started'}</p>
           </div>
         ) : (
           <>
@@ -503,7 +577,7 @@ const handlePastePhoto = (e) => {
                 <tbody>
                   {records.map((rec, i) => (
                     <tr key={rec._id} className={`border-b border-gray-100 hover:bg-blue-50 transition-colors ${i % 2 ? 'bg-gray-50/30' : 'bg-white'}`}>
-                      <td className="py-3 px-3 text-gray-400 text-xs">{(page - 1) * PAGE_SIZE + i + 1}</td>
+                      <td className="py-3 px-3 text-gray-400 text-xs">{(page - 1) * limit + i + 1}</td>
                       <td className="py-3 px-3 text-gray-600 whitespace-nowrap text-xs">{rec.accountOpenDate || '—'}</td>
                       <td className="py-3 px-3 font-medium text-gray-900 whitespace-nowrap">{rec.customerName || '—'}</td>
                       <td className="py-3 px-3 text-gray-600 font-mono text-xs">{rec.accountNo || '—'}</td>
@@ -520,8 +594,6 @@ const handlePastePhoto = (e) => {
                           ? <span className="bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">APY</span>
                           : <span className="text-gray-300">—</span>}
                       </td>
-
-                      {/* Unfreeze toggle */}
                       <td className="py-3 px-3">
                         <button
                           onClick={() => handleToggle(rec._id, 'unfreezeStatus', rec.unfreezeStatus)}
@@ -533,8 +605,6 @@ const handlePastePhoto = (e) => {
                             ${rec.unfreezeStatus ? 'translate-x-4' : 'translate-x-0'}`} />
                         </button>
                       </td>
-
-                      {/* Passbook toggle */}
                       <td className="py-3 px-3">
                         <button
                           onClick={() => handleToggle(rec._id, 'passbookIssued', rec.passbookIssued)}
@@ -546,15 +616,11 @@ const handlePastePhoto = (e) => {
                             ${rec.passbookIssued ? 'translate-x-4' : 'translate-x-0'}`} />
                         </button>
                       </td>
-
-                      {/* Sign button */}
                       <td className="py-3 px-3">
                         <button
                           onClick={() => router.push(`/sign?accountNo=${encodeURIComponent(rec.accountNo)}`)}
                           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors
-                            ${rec.signUrl
-                              ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                              : 'bg-orange-100 text-orange-700 hover:bg-orange-200'}`}
+                            ${rec.signUrl ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-orange-100 text-orange-700 hover:bg-orange-200'}`}
                         >
                           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -562,7 +628,6 @@ const handlePastePhoto = (e) => {
                           {rec.signUrl ? 'View' : 'Upload'}
                         </button>
                       </td>
-
                       <td className="py-3 px-3">
                         {rec.pdfDriveUrl
                           ? <a href={rec.pdfDriveUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs font-medium">View ↗</a>
@@ -575,45 +640,52 @@ const handlePastePhoto = (e) => {
             </div>
 
             {/* ── Pagination ── */}
-            {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between mt-5 pt-4 border-t border-gray-100">
-                <p className="text-sm text-gray-500">
-                  Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, pagination.total)} of <strong>{pagination.total}</strong> records
-                </p>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => handlePageChange(1)} disabled={page === 1}
-                    className="px-2 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">«</button>
-                  <button onClick={() => handlePageChange(page - 1)} disabled={page === 1}
-                    className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">‹ Prev</button>
+            {pagination.totalPages > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-gray-100">
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span>Rows:</span>
+                  <select value={limit}
+                    onChange={e => { const v = Number(e.target.value); setLimit(v); setPage(1); fetchRecords({ limit: v, page: 1 }); }}
+                    className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-xs outline-none focus:border-blue-400">
+                    {PAGE_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <span>of <strong>{pagination.total}</strong></span>
+                </div>
 
-                  {/* Page number buttons */}
+                <div className="flex items-center gap-1">
+                  <button onClick={() => { setPage(1); fetchRecords({ page: 1 }); }} disabled={page === 1}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 text-gray-500 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold">«</button>
+                  <button onClick={() => { const n = Math.max(1, page-1); setPage(n); fetchRecords({ page: n }); }} disabled={page === 1}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 text-gray-500 disabled:opacity-30 disabled:cursor-not-allowed">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                  </button>
                   {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
-                    .filter(p => p === 1 || p === pagination.totalPages || Math.abs(p - page) <= 2)
-                    .reduce((acc, p, idx, arr) => {
-                      if (idx > 0 && p - arr[idx - 1] > 1) acc.push('...');
-                      acc.push(p);
-                      return acc;
-                    }, [])
+                    .filter(p => p === 1 || p === pagination.totalPages || Math.abs(p - page) <= 1)
+                    .reduce((acc, p, idx, arr) => { if (idx > 0 && p - arr[idx-1] > 1) acc.push('...'); acc.push(p); return acc; }, [])
                     .map((p, idx) => p === '...'
-                      ? <span key={`dots-${idx}`} className="px-2 text-gray-400 text-xs">…</span>
-                      : <button key={p} onClick={() => handlePageChange(p)}
-                          className={`px-3 py-1.5 text-xs rounded-lg border font-medium
-                            ${p === page ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                      ? <span key={`d${idx}`} className="w-8 h-8 flex items-center justify-center text-gray-400 text-xs">…</span>
+                      : <button key={p} onClick={() => { setPage(p); fetchRecords({ page: p }); }}
+                          className={`w-8 h-8 rounded-lg text-xs font-semibold transition-colors ${page === p ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-600'}`}>
                           {p}
                         </button>
                     )
                   }
-
-                  <button onClick={() => handlePageChange(page + 1)} disabled={page === pagination.totalPages}
-                    className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next ›</button>
-                  <button onClick={() => handlePageChange(pagination.totalPages)} disabled={page === pagination.totalPages}
-                    className="px-2 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">»</button>
+                  <button onClick={() => { const n = Math.min(pagination.totalPages, page+1); setPage(n); fetchRecords({ page: n }); }} disabled={page === pagination.totalPages}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 text-gray-500 disabled:opacity-30 disabled:cursor-not-allowed">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                  <button onClick={() => { setPage(pagination.totalPages); fetchRecords({ page: pagination.totalPages }); }} disabled={page === pagination.totalPages}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 text-gray-500 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold">»</button>
                 </div>
+
+                <p className="text-xs text-gray-400">Page {page} of {pagination.totalPages}</p>
               </div>
             )}
           </>
         )}
       </div>
+
+      <Toast toasts={toasts} />
     </div>
   );
 }
