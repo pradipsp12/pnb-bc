@@ -6,24 +6,27 @@ import Account from '@/lib/models/Account';
 export const dynamic = 'force-dynamic';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const maskAadhar  = (a) => (!a || a.length < 12) ? (a || '—') : `XXXX XXXX ${a.slice(-4)}`;
-const toDDMMYYYY  = (yyyymmdd) => { if (!yyyymmdd) return null; const [y,m,d] = yyyymmdd.split('-'); return `${d}-${m}-${y}`; };
-const toDateGte   = (yyyymmdd) => new Date(`${yyyymmdd}T00:00:00.000Z`);
-const toDateLte   = (yyyymmdd) => new Date(`${yyyymmdd}T23:59:59.999Z`);
+const maskAadhar = (a) => (!a || a.length < 12) ? (a || '—') : `XXXX XXXX ${a.slice(-4)}`;
+const toDDMMYYYY = (yyyymmdd) => { if (!yyyymmdd) return null; const [y,m,d] = yyyymmdd.split('-'); return `${d}-${m}-${y}`; };
+const toDateGte  = (yyyymmdd) => new Date(`${yyyymmdd}T00:00:00.000Z`);
+const toDateLte  = (yyyymmdd) => new Date(`${yyyymmdd}T23:59:59.999Z`);
 
 export async function GET(request) {
   await connectDB();
 
   const { searchParams } = new URL(request.url);
-  const format   = searchParams.get('format') || '';
+  const format   = searchParams.get('format')   || '';
   const search   = searchParams.get('search')   || '';
-  const fromDate = searchParams.get('fromDate')  || '';
-  const toDate   = searchParams.get('toDate')    || '';
-  const scheme   = searchParams.get('scheme')    || '';
-  const apy      = searchParams.get('apy')       || '';
+  const fromDate = searchParams.get('fromDate') || '';
+  const toDate   = searchParams.get('toDate')   || '';
+  const scheme   = searchParams.get('scheme')   || '';
+  const apy      = searchParams.get('apy')      || '';
+  const unfreeze = searchParams.get('unfreeze') || ''; // 'done' | 'pending'
+  const passbook = searchParams.get('passbook') || ''; // 'issued' | 'pending'
 
-  // ── Build base query ──────────────────────────────────────────────────────
+  // ── Build query ───────────────────────────────────────────────────────────
   const query = {};
+
   if (search.trim()) {
     const re = { $regex: search.trim(), $options: 'i' };
     query.$or = [
@@ -31,11 +34,18 @@ export async function GET(request) {
       { mobileNo: re },     { aadhaarNo: re }, { referenceNo: re },
     ];
   }
+
   if (scheme)        query.scheme = scheme;
   if (apy === 'Yes') query.apy    = true;
   if (apy === 'No')  query.apy    = false;
 
-  // ── Date filter on accountOpenDate ("DD-MM-YYYY") via $expr $dateFromString ──
+  // ── Unfreeze / Passbook ───────────────────────────────────────────────────
+  if (unfreeze === 'done')    query.unfreezeStatus = true;
+  if (unfreeze === 'pending') query.unfreezeStatus = false;
+  if (passbook === 'issued')  query.passbookIssued = true;
+  if (passbook === 'pending') query.passbookIssued = false;
+
+  // ── Date filter on accountOpenDate ("DD-MM-YYYY") ─────────────────────────
   if (fromDate || toDate) {
     const dateExpr = {
       $dateFromString: {
@@ -66,19 +76,19 @@ export async function GET(request) {
     const ws = wb.addWorksheet('Records', { pageSetup: { orientation: 'landscape' } });
 
     ws.columns = [
-      { header: 'S.No',          key: 'sno',             width: 6  },
-      { header: 'Open Date',     key: 'accountOpenDate',  width: 14 },
-      { header: 'Customer Name', key: 'customerName',     width: 24 },
-      { header: 'Account No',    key: 'accountNo',        width: 18 },
-      { header: 'Customer ID',   key: 'customerId',       width: 16 },
-      { header: 'Aadhaar No',    key: 'aadhaarNo',        width: 18 },
-      { header: 'Mobile No',     key: 'mobileNo',         width: 14 },
-      { header: 'Sex',           key: 'sex',              width: 6  },
-      { header: 'Date of Birth', key: 'dateOfBirth',      width: 14 },
-      { header: 'Scheme',        key: 'scheme',           width: 10 },
-      { header: 'APY',           key: 'apy',              width: 8  },
-      { header: 'Unfreeze',      key: 'unfreezeStatus',   width: 10 },
-      { header: 'Passbook',      key: 'passbookIssued',   width: 10 },
+      { header: 'S.No',          key: 'sno',            width: 6  },
+      { header: 'Open Date',     key: 'accountOpenDate', width: 14 },
+      { header: 'Customer Name', key: 'customerName',    width: 24 },
+      { header: 'Account No',    key: 'accountNo',       width: 18 },
+      { header: 'Customer ID',   key: 'customerId',      width: 16 },
+      { header: 'Aadhaar No',    key: 'aadhaarNo',       width: 18 },
+      { header: 'Mobile No',     key: 'mobileNo',        width: 14 },
+      { header: 'Sex',           key: 'sex',             width: 6  },
+      { header: 'Date of Birth', key: 'dateOfBirth',     width: 14 },
+      { header: 'Scheme',        key: 'scheme',          width: 10 },
+      { header: 'APY',           key: 'apy',             width: 8  },
+      { header: 'Unfreeze',      key: 'unfreezeStatus',  width: 10 },
+      { header: 'Passbook',      key: 'passbookIssued',  width: 10 },
     ];
 
     ws.getRow(1).eachCell((cell) => {
@@ -132,52 +142,63 @@ export async function GET(request) {
     Font.register({ family: 'Helvetica', fonts: [] });
 
     const S = StyleSheet.create({
-      page:    { padding: 28, backgroundColor: '#fff', fontFamily: 'Helvetica' },
-      titleSec:{ marginBottom: 12, borderBottom: '2px solid #1D4ED8', paddingBottom: 8 },
-      title:   { fontSize: 18, fontFamily: 'Helvetica-Bold', color: '#1D4ED8', marginBottom: 2 },
-      subtitle:{ fontSize: 8, color: '#6B7280' },
-      table:   { width: '100%' },
-      hRow:    { flexDirection: 'row', backgroundColor: '#1D4ED8', borderRadius: 3, marginBottom: 1 },
-      row:     { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', minHeight: 20, alignItems: 'center' },
-      rowEven: { backgroundColor: '#EFF6FF' },
-      rowOdd:  { backgroundColor: '#FFFFFF' },
-      footer:  { position: 'absolute', bottom: 18, left: 28, right: 28, flexDirection: 'row', justifyContent: 'space-between', borderTop: '1px solid #E5E7EB', paddingTop: 5 },
-      fText:   { fontSize: 7, color: '#9CA3AF' },
+      page:     { padding: 28, backgroundColor: '#fff', fontFamily: 'Helvetica' },
+      titleSec: { marginBottom: 12, borderBottom: '2px solid #1D4ED8', paddingBottom: 8 },
+      title:    { fontSize: 18, fontFamily: 'Helvetica-Bold', color: '#1D4ED8', marginBottom: 2 },
+      subtitle: { fontSize: 8, color: '#6B7280' },
+      table:    { width: '100%' },
+      hRow:     { flexDirection: 'row', backgroundColor: '#1D4ED8', borderRadius: 3, marginBottom: 1 },
+      row:      { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', minHeight: 20, alignItems: 'center' },
+      rowEven:  { backgroundColor: '#EFF6FF' },
+      rowOdd:   { backgroundColor: '#FFFFFF' },
+      footer:   { position: 'absolute', bottom: 18, left: 28, right: 28, flexDirection: 'row', justifyContent: 'space-between', borderTop: '1px solid #E5E7EB', paddingTop: 5 },
+      fText:    { fontSize: 7, color: '#9CA3AF' },
+      // header cells
       hSno:  { width:'4%',  padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
       hDate: { width:'9%',  padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
-      hName: { width:'18%', padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
-      hAcc:  { width:'13%', padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
-      hCid:  { width:'12%', padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
-      hAadh: { width:'14%', padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
-      hMob:  { width:'11%', padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
-      hSch:  { width:'9%',  padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
+      hName: { width:'17%', padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
+      hAcc:  { width:'12%', padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
+      hCid:  { width:'11%', padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
+      hAadh: { width:'13%', padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
+      hMob:  { width:'10%', padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
+      hSch:  { width:'8%',  padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
       hApy:  { width:'5%',  padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
-      hUnf:  { width:'5%',  padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
+      hUnf:  { width:'6%',  padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
+      hPb:   { width:'5%',  padding:'3 2', fontSize:6, fontFamily:'Helvetica-Bold', color:'#fff', textAlign:'center' },
+      // data cells
       dSno:  { width:'4%',  padding:'2 2', fontSize:6, color:'#9CA3AF', textAlign:'center' },
       dDate: { width:'9%',  padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
-      dName: { width:'18%', padding:'2 2', fontSize:6, color:'#111827', textAlign:'left'   },
-      dAcc:  { width:'13%', padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
-      dCid:  { width:'12%', padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
-      dAadh: { width:'14%', padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
-      dMob:  { width:'11%', padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
-      dSch:  { width:'9%',  padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
+      dName: { width:'17%', padding:'2 2', fontSize:6, color:'#111827', textAlign:'left'   },
+      dAcc:  { width:'12%', padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
+      dCid:  { width:'11%', padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
+      dAadh: { width:'13%', padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
+      dMob:  { width:'10%', padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
+      dSch:  { width:'8%',  padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
       dApy:  { width:'5%',  padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
-      dUnf:  { width:'5%',  padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
+      dUnf:  { width:'6%',  padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
+      dPb:   { width:'5%',  padding:'2 2', fontSize:6, color:'#374151', textAlign:'center' },
     });
+
+    // Build subtitle showing all active filters
+    const filterParts = [
+      `Generated: ${new Date().toLocaleString('en-IN')}`,
+      `Total: ${records.length}`,
+      scheme   ? `Scheme: ${scheme}`            : null,
+      apy      ? `APY: ${apy}`                  : null,
+      unfreeze ? `Unfreeze: ${unfreeze}`         : null,
+      passbook ? `Passbook: ${passbook}`         : null,
+      fromDate ? `From: ${toDDMMYYYY(fromDate)}` : null,
+      toDate   ? `To: ${toDDMMYYYY(toDate)}`     : null,
+      search   ? `Search: "${search}"`           : null,
+    ].filter(Boolean).join('   |   ');
 
     const MyDoc = () => (
       <Document title="Records Report" author="PNB Form Data Extractor">
         <Page size="A4" orientation="landscape" style={S.page}>
+
           <View style={S.titleSec}>
             <Text style={S.title}>Records Report</Text>
-            <Text style={S.subtitle}>
-              Generated: {new Date().toLocaleString('en-IN')}{'   '}|{'   '}Total: {records.length}
-              {scheme   ? `   |   Scheme: ${scheme}` : ''}
-              {apy      ? `   |   APY: ${apy}`       : ''}
-              {fromDate ? `   |   From: ${toDDMMYYYY(fromDate)}` : ''}
-              {toDate   ? `   |   To: ${toDDMMYYYY(toDate)}`     : ''}
-              {search   ? `   |   Search: "${search}"` : ''}
-            </Text>
+            <Text style={S.subtitle}>{filterParts}</Text>
           </View>
 
           <View style={S.table}>
@@ -191,8 +212,10 @@ export async function GET(request) {
               <Text style={S.hMob}>Mobile No</Text>
               <Text style={S.hSch}>Scheme</Text>
               <Text style={S.hApy}>APY</Text>
-              <Text style={S.hUnf}>Unfrz</Text>
+              <Text style={S.hUnf}>Unfreeze</Text>
+              <Text style={S.hPb}>PBook</Text>
             </View>
+
             {records.map((r, i) => (
               <View key={String(r._id)} style={[S.row, i % 2 === 0 ? S.rowEven : S.rowOdd]}>
                 <Text style={S.dSno}>{i + 1}</Text>
@@ -205,6 +228,7 @@ export async function GET(request) {
                 <Text style={S.dSch}>{r.scheme           || '—'}</Text>
                 <Text style={S.dApy}>{r.apy ? 'Yes' : 'No'}</Text>
                 <Text style={S.dUnf}>{r.unfreezeStatus ? '✓' : '—'}</Text>
+                <Text style={S.dPb}>{r.passbookIssued  ? '✓' : '—'}</Text>
               </View>
             ))}
           </View>
@@ -213,6 +237,7 @@ export async function GET(request) {
             <Text style={S.fText}>PNB Form Data Extractor</Text>
             <Text style={S.fText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
           </View>
+
         </Page>
       </Document>
     );
