@@ -247,31 +247,74 @@ export default function Home() {
     <div className="max-w-7xl mx-auto px-4 py-8">
 
       {/* ── Header ── */}
-      <div className="mb-8 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-700 rounded-lg flex items-center justify-center text-white font-bold text-lg">P</div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">PNB Form Data Extractor</h1>
-            <p className="text-gray-500 text-sm">Upload FORM → Extract → Save to MongoDB, Google Sheets & Drive</p>
-          </div>
-        </div>
-        <div className="flex gap-3">
-          <Link href="/customers"
-            className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition-colors shadow-sm">
-            My Customers
-          </Link>
-          <button onClick={handleLogout}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Logout
-          </button>
-        </div>
-      </div>
+      <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+
+  {/* Left Section */}
+  <div className="flex items-center gap-3">
+    <Link href="/" className="w-10 h-10 bg-blue-700 rounded-lg flex items-center justify-center text-white font-bold text-lg shrink-0">
+      P
+    </Link>
+    <div>
+      <h1 className="text-xl md:text-2xl font-bold text-gray-900">
+        PNB Form Data Extractor
+      </h1>
+      <p className="text-gray-500 text-xs md:text-sm">
+        Upload FORM → Extract → Save to MongoDB, Google Sheets & Drive
+      </p>
+    </div>
+  </div>
+
+  {/* Right Section */}
+  <div className="flex sm:flex-row gap-3 w-full md:w-auto">
+
+    <Link
+      href="/customers"
+      className="w-full sm:w-auto text-center px-4 py-2 text-sm font-medium 
+      text-gray-600 bg-white border border-gray-200 rounded-xl 
+      hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 
+      transition-colors shadow-sm"
+    >
+      My Customers
+    </Link>
+
+    <Link
+      href="/reissue-passbook"
+      className="w-full sm:w-auto text-center px-4 py-2 text-sm font-medium 
+      text-gray-600 bg-white border border-gray-200 rounded-xl 
+      hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 
+      transition-colors shadow-sm overflow-ellipsis whitespace-nowrap"
+    >
+      Reissue-Passbook
+    </Link>
+
+    <button
+      onClick={handleLogout}
+      className="w-full sm:w-auto flex items-center justify-center gap-2 
+      px-4 py-2 text-sm font-medium text-gray-600 bg-white border 
+      border-gray-200 rounded-xl hover:bg-red-50 hover:text-red-600 
+      hover:border-red-200 transition-colors shadow-sm"
+    >
+      <svg
+        className="w-4 h-4"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+        />
+      </svg>
+      Logout
+    </button>
+
+  </div>
+</div>
 
       {/* ── Upload Card ── */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
+      <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
         <h2 className="text-lg font-semibold text-gray-800 mb-5">Upload Form</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="flex flex-col gap-4">
@@ -298,7 +341,7 @@ export default function Home() {
                 ) : (
                   <div>
                     <p className="text-gray-600 text-sm font-medium">Drag & drop or <span className="text-blue-600 underline">click to browse</span></p>
-                    <p className="text-gray-400 text-xs mt-1">PNB Account Opening Form (FORM-33)</p>
+                    <p className="text-gray-400 text-xs mt-1">PNB Account Opening Form</p>
                   </div>
                 )}
               </div>
@@ -508,31 +551,53 @@ export default function Home() {
           </div>
 
           {/* Row 3: Date range */}
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <div className="flex items-center gap-2 flex-1">
-              <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-white flex-1">
-                <span className="text-gray-400 text-xs whitespace-nowrap">From</span>
-                <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
-                  className="text-sm text-gray-700 focus:outline-none bg-transparent flex-1" />
-              </div>
-              <span className="text-gray-400 text-xs">—</span>
-              <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-white flex-1">
-                <span className="text-gray-400 text-xs whitespace-nowrap">To</span>
-                <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-                  className="text-sm text-gray-700 focus:outline-none bg-transparent flex-1" />
-              </div>
-              <button onClick={applyDateFilter}
-                className="px-4 py-2 bg-gray-700 text-white text-sm rounded-xl hover:bg-gray-800 font-medium whitespace-nowrap">
-                Apply
-              </button>
-            </div>
-            {hasFilters && (
-              <button onClick={clearFilters}
-                className="px-3 py-2 border border-red-200 text-red-600 bg-red-50 text-sm rounded-xl hover:bg-red-100 whitespace-nowrap font-medium">
-                ✕ Clear All
-              </button>
-            )}
-          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full">
+
+  {/* Date Filter Section */}
+  <div className="flex flex-col sm:flex-row gap-3 w-full">
+
+    {/* From Date */}
+    <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-white w-full">
+      <span className="text-gray-400 text-xs whitespace-nowrap">From</span>
+      <input
+        type="date"
+        value={fromDate}
+        onChange={e => setFromDate(e.target.value)}
+        className="text-sm text-gray-700 focus:outline-none bg-transparent flex-1 min-w-0"
+      />
+    </div>
+
+    {/* To Date */}
+    <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-white w-full">
+      <span className="text-gray-400 text-xs whitespace-nowrap">To</span>
+      <input
+        type="date"
+        value={toDate}
+        onChange={e => setToDate(e.target.value)}
+        className="text-sm text-gray-700 focus:outline-none bg-transparent flex-1 min-w-0"
+      />
+    </div>
+
+    {/* Apply Button */}
+    <button
+      onClick={applyDateFilter}
+      className="w-full sm:w-auto px-4 py-2 bg-gray-700 text-white text-sm rounded-xl hover:bg-gray-800 font-medium"
+    >
+      Apply
+    </button>
+
+  </div>
+
+  {/* Clear Button */}
+  {hasFilters && (
+    <button
+      onClick={clearFilters}
+      className="w-full sm:w-auto px-3 py-2 border border-red-200 text-red-600 bg-red-50 text-sm rounded-xl hover:bg-red-100 font-medium"
+    >
+      ✕ Clear All
+    </button>
+  )}
+</div>
 
           {/* Active filter badges */}
           {hasFilters && (

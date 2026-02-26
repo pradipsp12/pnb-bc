@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { Suspense } from 'react';
+import Link from 'next/link';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SCHEMES    = ['PMSBY', 'PMJJBY'];
@@ -156,6 +157,7 @@ function CustomerModal({ isOpen, onClose, onSaved, editData }) {
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
+             
             <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
               <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 {isEdit
@@ -458,6 +460,11 @@ function CustomersPageContent() {
         <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
+              <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+              </Link>
               <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
                 <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -468,7 +475,12 @@ function CustomersPageContent() {
                 <p className="text-xs text-gray-400 hidden sm:block">Manage all customer records</p>
               </div>
             </div>
-            <button
+            <div className='flex justify-end gap-3'>
+              <Link href="/reissue-passbook"
+            className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition-colors shadow-sm">
+            Reissue-Passbook
+          </Link>
+          <button
               onClick={() => { setEditData(null); setModalOpen(true); }}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-colors flex-shrink-0"
             >
@@ -478,6 +490,9 @@ function CustomersPageContent() {
               <span className="hidden sm:inline">Add Customer</span>
               <span className="sm:hidden">Add</span>
             </button>
+            </div>
+            
+
           </div>
         </div>
 
