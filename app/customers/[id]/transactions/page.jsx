@@ -7,7 +7,7 @@ import { notFound } from 'next/navigation';
 import connectDB from '@/lib/mongodb'; 
 import Customer    from '@/lib/models/Customer';
 import Transaction from '@/lib/models/Transaction';
-import TransactionClient from './TransactionClient';
+import TransactionClient from '@lib/components/TransactionClient';
 
 // ─── Compute balance from a list of transactions ──────────────────────────────
 function computeBalance(transactions) {
