@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { Suspense } from 'react';
 import Link from 'next/link';
+import { Suspense } from 'react';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SCHEMES    = ['PMSBY', 'PMJJBY'];
@@ -16,7 +16,8 @@ const EMPTY_FORM = {
   adharNo:      '',
   mobileNo:     '',
   scheme:       '',
-  apy:          false,
+  apy:          '',
+  vip:          false,
 };
 
 // ─── Reusable badge ───────────────────────────────────────────────────────────
@@ -105,6 +106,7 @@ function CustomerModal({ isOpen, onClose, onSaved, editData }) {
         mobileNo:     editData.mobileNo     || '',
         scheme:       editData.scheme       || '',
         apy:          editData.apy          || '',
+        vip:          !!editData.vip,
       } : EMPTY_FORM);
       setErrors({});
       setApiErr('');
@@ -122,6 +124,8 @@ function CustomerModal({ isOpen, onClose, onSaved, editData }) {
     if (!form.accountNo.trim())                            e.accountNo    = 'Account No is required';
     if (!/^\d{12}$/.test(form.adharNo))                   e.adharNo      = 'Must be 12 digits';
     if (form.mobileNo && !/^\d{10}$/.test(form.mobileNo)) e.mobileNo     = 'Must be 10 digits';
+    // if (!form.scheme)                                      e.scheme       = 'Select a scheme';
+    // if (!form.apy)                                         e.apy          = 'Select APY';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -157,7 +161,6 @@ function CustomerModal({ isOpen, onClose, onSaved, editData }) {
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
-             
             <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
               <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 {isEdit
@@ -217,22 +220,43 @@ function CustomerModal({ isOpen, onClose, onSaved, editData }) {
               value={form.scheme} onChange={handleChange} errors={errors}
               options={SCHEMES} placeholder="Select scheme" 
             />
-                        {/* Replace SelectField for APY with this */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">APY</label>
-              <button
-                type="button"
-                onClick={() => handleChange('apy', !form.apy)}
-                className={`w-full py-2.5 rounded-xl border text-sm font-medium transition-all
-                  ${form.apy
-                    ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-blue-400'
-                  }`}
-              >
-                {form.apy ? '✅ Yes' : 'No'}
-              </button>
-            </div>
+            <SelectField
+              label="APY" name="apy"
+              value={form.apy} onChange={handleChange} errors={errors}
+              options={APY_OPTS} placeholder="Select" 
+            />
           </div>
+
+          {/* VIP checkbox — only shown when editing */}
+          {isEdit && (
+            <label className="flex items-center gap-3 cursor-pointer group select-none p-3 rounded-xl border border-gray-200 hover:border-yellow-300 hover:bg-yellow-50/50 transition-all">
+              <div className="relative flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={form.vip}
+                  onChange={e => handleChange('vip', e.target.checked)}
+                  className="sr-only"
+                />
+                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors
+                  ${form.vip ? 'bg-yellow-400 border-yellow-400' : 'border-gray-300 bg-white group-hover:border-yellow-300'}`}>
+                  {form.vip && (
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                  ⭐ VIP Customer
+                </p>
+                <p className="text-xs text-gray-400">Mark this customer as VIP</p>
+              </div>
+              {form.vip && (
+                <span className="ml-auto text-xs font-bold text-yellow-600 bg-yellow-100 border border-yellow-200 px-2 py-0.5 rounded-full">VIP</span>
+              )}
+            </label>
+          )}
         </div>
 
         {/* Footer */}
@@ -325,6 +349,9 @@ function CustomersPageContent() {
   const [search,       setSearch]       = useState(searchParams.get('search') || '');
   const [schemeFilter, setSchemeFilter] = useState(searchParams.get('scheme') || '');
   const [apyFilter,    setApyFilter]    = useState(searchParams.get('apy')    || '');
+  const [vipFilter,    setVipFilter]    = useState('');
+  const [fromDate,     setFromDate]     = useState('');
+  const [toDate,       setToDate]       = useState('');
   const [page,         setPage]         = useState(Number(searchParams.get('page')  || 1));
   const [limit,        setLimit]        = useState(Number(searchParams.get('limit') || 10));
 
@@ -349,8 +376,11 @@ function CustomersPageContent() {
       page:   overrides.page   ?? page,
       limit:  overrides.limit  ?? limit,
       search: overrides.search !== undefined ? overrides.search : search,
-      scheme: overrides.scheme !== undefined ? overrides.scheme : schemeFilter,
-      apy:    overrides.apy    !== undefined ? overrides.apy    : apyFilter,
+      scheme:    overrides.scheme    !== undefined ? overrides.scheme    : schemeFilter,
+      apy:       overrides.apy       !== undefined ? overrides.apy       : apyFilter,
+      vip:       overrides.vip       !== undefined ? overrides.vip       : vipFilter,
+      fromDate:  overrides.fromDate  !== undefined ? overrides.fromDate  : fromDate,
+      toDate:    overrides.toDate    !== undefined ? overrides.toDate    : toDate,
     });
     try {
       const res  = await fetch(`/api/customers?${q}`);
@@ -364,9 +394,9 @@ function CustomersPageContent() {
     } finally {
       setLoadingData(false);
     }
-  }, [page, limit, search, schemeFilter, apyFilter, toast]);
+  }, [page, limit, search, schemeFilter, apyFilter, vipFilter, fromDate, toDate, toast]);
 
-  useEffect(() => { fetchCustomers(); }, [page, limit, schemeFilter, apyFilter]);
+  useEffect(() => { fetchCustomers(); }, [page, limit, schemeFilter, apyFilter, vipFilter]);
 
   const handleSearch = (val) => {
     setSearch(val);
@@ -379,7 +409,9 @@ function CustomersPageContent() {
 
   const handleSchemeFilter = (val) => { setSchemeFilter(val); setPage(1); fetchCustomers({ scheme: val, page: 1 }); };
   const handleApyFilter    = (val) => { setApyFilter(val);    setPage(1); fetchCustomers({ apy: val,    page: 1 }); };
+  const handleVipFilter    = (val) => { setVipFilter(val);    setPage(1); fetchCustomers({ vip: val,    page: 1 }); };
   const handleLimitChange  = (val) => { setLimit(val);        setPage(1); fetchCustomers({ limit: val,  page: 1 }); };
+  const applyDateFilter    = ()    => { setPage(1);           fetchCustomers({ fromDate, toDate, page: 1 }); };
 
   const handleSaved = (customer, isEdit) => {
     if (isEdit) {
@@ -413,7 +445,7 @@ function CustomersPageContent() {
   const handleExport = async (format) => {
     setExporting(format);
     try {
-      const q   = new URLSearchParams({ format, search, scheme: schemeFilter, apy: apyFilter });
+      const q   = new URLSearchParams({ format, search, scheme: schemeFilter, apy: apyFilter, vip: vipFilter, fromDate, toDate });
       const res = await fetch(`/api/customers/export?${q}`);
       if (!res.ok) { toast('Export failed', 'error'); return; }
       const blob = await res.blob();
@@ -433,11 +465,12 @@ function CustomersPageContent() {
 
   const clearFilters = () => {
     setSearch(''); setSchemeFilter(''); setApyFilter('');
+    setVipFilter(''); setFromDate(''); setToDate('');
     setPage(1);
-    fetchCustomers({ search: '', scheme: '', apy: '', page: 1 });
+    fetchCustomers({ search: '', scheme: '', apy: '', vip: '', fromDate: '', toDate: '', page: 1 });
   };
 
-  const hasFilters = search || schemeFilter || apyFilter;
+  const hasFilters = search || schemeFilter || apyFilter || vipFilter || fromDate || toDate;
 
   return (
     <>
@@ -456,45 +489,83 @@ function CustomersPageContent() {
 
       <div className="min-h-screen bg-gray-50">
 
-        {/* Sticky header */}
-        <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-              </Link>
-              <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-gray-900 leading-tight">Customers</h1>
-                <p className="text-xs text-gray-400 hidden sm:block">Manage all customer records</p>
-              </div>
-            </div>
-            <div className='flex justify-end gap-3'>
-              <Link href="/reissue-passbook"
-            className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition-colors shadow-sm">
-            Reissue-Passbook
-          </Link>
-          <button
-              onClick={() => { setEditData(null); setModalOpen(true); }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-colors flex-shrink-0"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              <span className="hidden sm:inline">Add Customer</span>
-              <span className="sm:hidden">Add</span>
-            </button>
-            </div>
-            
+       {/* Sticky header */}
+<div className="sticky top-0 z-30 backdrop-blur bg-white/90 border-b border-gray-200">
 
-          </div>
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 md:py-4">
+
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+
+      {/* LEFT SECTION */}
+      <div className="flex items-center gap-3">
+
+        {/* Back Button */}
+        <Link
+          href="/"
+          className="p-2 rounded-lg hover:bg-gray-100 
+          text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+        </Link>
+
+        {/* Icon */}
+        <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-indigo-600 
+          rounded-xl flex items-center justify-center shadow-sm">
+          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
         </div>
+
+        {/* Title */}
+        <div>
+          <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">
+            Customers
+          </h1>
+          <p className="hidden sm:block text-xs text-gray-400">
+            Manage all customer records
+          </p>
+        </div>
+      </div>
+
+      {/* RIGHT SECTION */}
+      <div className="flex items-center gap-2 w-full md:w-auto">
+
+        {/* Reissue Button */}
+        <Link
+          href="/reissue-passbook"
+          className="flex-1 md:flex-none inline-flex items-center justify-center gap-2
+          px-3 py-2 text-xs md:text-sm font-medium
+          text-gray-700 bg-gray-100 rounded-lg
+          hover:bg-gray-200 transition-all duration-200"
+        >
+          📘
+          <span className="hidden sm:inline">Passbook</span>
+        </Link>
+
+        {/* Add Customer Button */}
+        <button
+          onClick={() => { setEditData(null); setModalOpen(true); }}
+          className="flex-1 md:flex-none inline-flex items-center justify-center gap-2
+          px-3 py-2 text-xs md:text-sm font-semibold
+          text-white bg-blue-600 rounded-lg
+          hover:bg-blue-700 active:scale-95
+          transition-all duration-200 shadow-sm"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+
+          <span className="hidden sm:inline">Add Customer</span>
+          <span className="sm:hidden">Add</span>
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+</div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
 
@@ -552,6 +623,16 @@ function CustomersPageContent() {
                   <option value="">All APY</option>
                   {APY_OPTS.map(a => <option key={a} value={a}>APY: {a}</option>)}
                 </select>
+                {/* VIP filter */}
+                <select
+                  value={vipFilter}
+                  onChange={e => handleVipFilter(e.target.value)}
+                  className="flex-1 sm:flex-none px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                >
+                  <option value="">All VIP</option>
+                  <option value="Yes">⭐ VIP Only</option>
+                  <option value="No">Non-VIP</option>
+                </select>
                 {hasFilters && (
                   <button onClick={clearFilters} className="px-3 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-600 text-sm font-medium hover:bg-red-100 transition-colors flex-shrink-0">
                     ✕ Clear
@@ -559,6 +640,36 @@ function CustomersPageContent() {
                 )}
               </div>
             </div>
+
+            {/* Date range row */}
+            <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-gray-100 sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 flex-1">
+                <span className="text-gray-400 text-xs whitespace-nowrap">From</span>
+                <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+                  className="text-sm text-gray-700 focus:outline-none bg-transparent flex-1 w-full" />
+              </div>
+              <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 flex-1">
+                <span className="text-gray-400 text-xs whitespace-nowrap">To</span>
+                <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+                  className="text-sm text-gray-700 focus:outline-none bg-transparent flex-1 w-full" />
+              </div>
+              <button onClick={applyDateFilter}
+                className="w-full sm:w-auto px-4 py-2 bg-gray-700 text-white text-sm rounded-xl hover:bg-gray-800 font-medium">
+                Apply
+              </button>
+            </div>
+
+            {/* Active filter badges */}
+            {hasFilters && (
+              <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-gray-100">
+                {search      && <span className="bg-blue-50   text-blue-700   border border-blue-200   text-xs px-2.5 py-0.5 rounded-full">🔍 "{search}"</span>}
+                {schemeFilter && <span className="bg-green-50  text-green-700  border border-green-200  text-xs px-2.5 py-0.5 rounded-full">📋 {schemeFilter}</span>}
+                {apyFilter    && <span className="bg-purple-50 text-purple-700 border border-purple-200 text-xs px-2.5 py-0.5 rounded-full">APY: {apyFilter}</span>}
+                {vipFilter    && <span className="bg-yellow-50 text-yellow-700 border border-yellow-200 text-xs px-2.5 py-0.5 rounded-full">⭐ VIP: {vipFilter}</span>}
+                {fromDate     && <span className="bg-orange-50 text-orange-700 border border-orange-200 text-xs px-2.5 py-0.5 rounded-full">📅 From: {fromDate}</span>}
+                {toDate       && <span className="bg-orange-50 text-orange-700 border border-orange-200 text-xs px-2.5 py-0.5 rounded-full">📅 To: {toDate}</span>}
+              </div>
+            )}
 
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
               <p className="text-xs text-gray-400">
@@ -589,7 +700,7 @@ function CustomersPageContent() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    {['#', 'Customer Name', 'Account No', 'Aadhaar No', 'Mobile No', 'Scheme', 'APY', 'Created', 'Actions'].map(h => (
+                    {['#', 'Customer Name', 'Account No', 'Aadhaar No', 'Mobile No', 'Scheme', 'APY', 'VIP', 'Created', 'Actions'].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -598,7 +709,7 @@ function CustomersPageContent() {
                   {loadingData
                     ? Array.from({ length: limit }).map((_, i) => (
                         <tr key={i} className="animate-pulse">
-                          {Array.from({ length: 9 }).map((_, j) => (
+                          {Array.from({ length: 10 }).map((_, j) => (
                             <td key={j} className="px-4 py-3"><div className="h-4 bg-gray-100 rounded-lg" style={{ width: `${60 + (j * 17) % 40}%` }} /></td>
                           ))}
                         </tr>
@@ -606,7 +717,7 @@ function CustomersPageContent() {
                     : customers.length === 0
                       ? (
                         <tr>
-                          <td colSpan={9} className="text-center py-16">
+                          <td colSpan={10} className="text-center py-16">
                             <div className="text-5xl mb-3">🔍</div>
                             <p className="text-gray-500 font-medium">No customers found</p>
                             <p className="text-gray-400 text-xs mt-1">Try adjusting your search or filters</p>
@@ -617,18 +728,23 @@ function CustomersPageContent() {
                         <tr key={c._id} className="hover:bg-blue-50/40 transition-colors animate-fade-in">
                           <td className="px-4 py-3 text-gray-400 text-xs font-mono">{(page - 1) * limit + i + 1}</td>
                           <td className="px-4 py-3">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xs flex-shrink-0">
+                            <Link href={`/customers/${c._id}/transactions`} className="flex items-center gap-2.5 group">
+                              <div className="w-8 h-8 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center text-blue-700 font-bold text-xs flex-shrink-0 transition-colors">
                                 {c.customerName.charAt(0).toUpperCase()}
                               </div>
-                              <span className="font-medium text-gray-900 truncate max-w-[140px]">{c.customerName}</span>
-                            </div>
+                              <span className="font-medium text-gray-900 group-hover:text-blue-600 truncate max-w-[140px] transition-colors">{c.customerName}</span>
+                            </Link>
                           </td>
                           <td className="px-4 py-3 font-mono text-gray-700 text-xs">{c.accountNo}</td>
                           <td className="px-4 py-3 font-mono text-gray-600 text-xs">{c.adharNo.replace(/(\d{4})(\d{4})(\d{4})/, '$1 $2 $3')}</td>
                           <td className="px-4 py-3 text-gray-600">{c.mobileNo || <span className="text-gray-300">—</span>}</td>
                           <td className="px-4 py-3"><Badge label={c.scheme} color={c.scheme === 'PMSBY' ? 'green' : 'purple'} /></td>
-                          <td className="px-4 py-3"><Badge label={c.apy ? 'Yes' : 'No'} color={c.apy ? 'blue' : 'orange'} /></td>
+                          <td className="px-4 py-3"><Badge label={c.apy} color={c.apy === 'Yes' ? 'blue' : 'orange'} /></td>
+                          <td className="px-4 py-3">
+                            {c.vip
+                              ? <span className="inline-flex items-center gap-1 text-xs font-bold text-yellow-600 bg-yellow-100 border border-yellow-200 px-2 py-0.5 rounded-full">⭐ VIP</span>
+                              : <span className="text-gray-300">—</span>}
+                          </td>
                           <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
                             {new Date(c.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </td>
@@ -674,7 +790,7 @@ function CustomersPageContent() {
                             {c.customerName.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold text-gray-900 truncate">{c.customerName}</p>
+                            <Link href={`/customers/${c._id}/transactions`} className="font-semibold text-gray-900 hover:text-blue-600 transition-colors truncate block">{c.customerName}</Link>
                             <p className="text-xs font-mono text-gray-500">{c.accountNo}</p>
                           </div>
                         </div>
@@ -704,6 +820,7 @@ function CustomersPageContent() {
                       <div className="flex items-center gap-2 mt-2">
                         <Badge label={c.scheme} color={c.scheme === 'PMSBY' ? 'green' : 'purple'} />
                         <Badge label={`APY: ${c.apy}`} color={c.apy === 'Yes' ? 'blue' : 'orange'} />
+                        {c.vip && <span className="inline-flex items-center gap-1 text-xs font-bold text-yellow-600 bg-yellow-100 border border-yellow-200 px-2 py-0.5 rounded-full">⭐ VIP</span>}
                         <span className="text-xs text-gray-400 ml-auto">
                           {new Date(c.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
                         </span>

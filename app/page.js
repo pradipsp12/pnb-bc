@@ -247,68 +247,80 @@ export default function Home() {
     <div className="max-w-7xl mx-auto px-4 py-8">
 
       {/* ── Header ── */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+     <div className="mb-6 bg-white rounded-2xl shadow-sm border border-gray-200 p-4 md:p-6">
 
-  {/* Left Section */}
-  <div className="flex items-center gap-3">
-    <Link href="/" className="w-10 h-10 bg-blue-700 rounded-lg flex items-center justify-center text-white font-bold text-lg shrink-0">
-      P
-    </Link>
-    <div>
-      <h1 className="text-xl md:text-2xl font-bold text-gray-900">
-        PNB Form Data Extractor
-      </h1>
-      <p className="text-gray-500 text-xs md:text-sm">
-        Upload FORM → Extract → Save to MongoDB, Google Sheets & Drive
-      </p>
-    </div>
-  </div>
+  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
 
-  {/* Right Section */}
-  <div className="flex sm:flex-row gap-3 w-full md:w-auto">
-
-    <Link
-      href="/customers"
-      className="w-full sm:w-auto text-center px-4 py-2 text-sm font-medium 
-      text-gray-600 bg-white border border-gray-200 rounded-xl 
-      hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 
-      transition-colors shadow-sm"
-    >
-      My Customers
-    </Link>
-
-    <Link
-      href="/reissue-passbook"
-      className="w-full sm:w-auto text-center px-4 py-2 text-sm font-medium 
-      text-gray-600 bg-white border border-gray-200 rounded-xl 
-      hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 
-      transition-colors shadow-sm overflow-ellipsis whitespace-nowrap"
-    >
-      Reissue-Passbook
-    </Link>
-
-    <button
-      onClick={handleLogout}
-      className="w-full sm:w-auto flex items-center justify-center gap-2 
-      px-4 py-2 text-sm font-medium text-gray-600 bg-white border 
-      border-gray-200 rounded-xl hover:bg-red-50 hover:text-red-600 
-      hover:border-red-200 transition-colors shadow-sm"
-    >
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
+    {/* LEFT SIDE */}
+    <div className="flex items-center gap-3">
+      <Link
+        href="/"
+        className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 
+        rounded-xl flex items-center justify-center 
+        text-white font-bold text-lg shadow-md"
       >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-        />
-      </svg>
-      Logout
-    </button>
+        P
+      </Link>
+
+      <div>
+        <h1 className="text-lg md:text-2xl font-bold text-gray-900 leading-tight">
+          PNB Form Data Extractor
+        </h1>
+        <p className="hidden sm:block text-gray-500 text-xs md:text-sm">
+          Upload → Extract → Save Securely
+        </p>
+      </div>
+    </div>
+
+    {/* RIGHT SIDE */}
+    <div className="flex items-center gap-2 w-full md:w-auto">
+
+      <Link
+        href="/customers"
+        className="flex-1 md:flex-none inline-flex items-center justify-center gap-2
+        px-3 py-2 text-xs md:text-sm font-semibold
+        text-white bg-blue-600 rounded-lg
+        hover:bg-blue-700 transition-all duration-200 shadow-sm"
+      >
+        👥
+        <span className="hidden sm:inline">Customers</span>
+      </Link>
+
+      <Link
+        href="/reissue-passbook"
+        className="flex-1 md:flex-none inline-flex items-center justify-center gap-2
+        px-3 py-2 text-xs md:text-sm font-semibold
+        text-white bg-emerald-600 rounded-lg
+        hover:bg-emerald-700 transition-all duration-200 shadow-sm"
+      >
+        📘
+        <span className="hidden sm:inline">Passbook</span>
+      </Link>
+
+      <button
+        onClick={handleLogout}
+        className="flex-1 md:flex-none inline-flex items-center justify-center
+        px-3 py-2 text-xs md:text-sm font-medium
+        text-red-600 border border-red-200 rounded-lg
+        hover:bg-red-50 transition-all duration-200"
+      >
+        <svg
+          className="w-4 h-4 md:mr-1"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+          />
+        </svg>
+        <span className="hidden md:inline">Logout</span>
+      </button>
+
+    </div>
 
   </div>
 </div>

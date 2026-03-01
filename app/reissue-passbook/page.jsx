@@ -99,7 +99,7 @@ function ReissueModal({ isOpen, onClose, onSaved, editData }) {
   const [errors,         setErrors]         = useState({});
   const [saving,         setSaving]         = useState(false);
   const [apiErr,         setApiErr]         = useState('');
-  const [customerStatus, setCustomerStatus] = useState(''); // 'added' | 'skipped'
+  const [customerStatus, setCustomerStatus] = useState('');
   const isEdit = !!editData;
 
   useEffect(() => {
@@ -200,7 +200,6 @@ function ReissueModal({ isOpen, onClose, onSaved, editData }) {
             </div>
           )}
 
-          {/* Customer sync status banner */}
           {customerStatus === 'added' && (
             <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-700 text-sm flex items-center gap-2 font-medium">
               <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -299,7 +298,7 @@ function ReissuePassbookContent() {
   const [toDate,      setToDate]      = useState('');
   const [page,        setPage]        = useState(1);
   const [limit,       setLimit]       = useState(10);
-  const [exporting,   setExporting]   = useState(''); // 'pdf' | 'excel' | ''
+  const [exporting,   setExporting]   = useState('');
 
   const [modalOpen,   setModalOpen]   = useState(false);
   const [editData,    setEditData]    = useState(null);
@@ -309,14 +308,12 @@ function ReissuePassbookContent() {
 
   const searchTimer = useRef(null);
 
-  // ── Toast ──────────────────────────────────────────────────────────────────
   const toast = useCallback((message, type = 'success') => {
     const id = Date.now();
     setToasts(p => [...p, { id, message, type }]);
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3500);
   }, []);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchRecords = useCallback(async (overrides = {}) => {
     setLoadingData(true);
     const q = new URLSearchParams({
@@ -336,7 +333,6 @@ function ReissuePassbookContent() {
 
   useEffect(() => { fetchRecords(); }, [page, limit]);
 
-  // ── Search (debounced 400ms) ───────────────────────────────────────────────
   const handleSearch = (val) => {
     setSearch(val);
     clearTimeout(searchTimer.current);
@@ -357,7 +353,6 @@ function ReissuePassbookContent() {
 
   const hasFilters = search || fromDate || toDate;
 
-  // ── Export — passes active filters so export matches what's on screen ──────
   const handleExport = async (format) => {
     setExporting(format);
     try {
@@ -376,7 +371,6 @@ function ReissuePassbookContent() {
     finally  { setExporting(''); }
   };
 
-  // ── CRUD ───────────────────────────────────────────────────────────────────
   const handleSaved = (record, isEdit) => {
     if (isEdit) {
       setRecords(p => p.map(r => r._id === record._id ? record : r));
@@ -403,7 +397,6 @@ function ReissuePassbookContent() {
     finally  { setDeleting(false); }
   };
 
-  // Page-level stats (from loaded page — indicative)
   const pmsby  = records.filter(r => r.scheme === 'PMSBY').length;
   const pmjjby = records.filter(r => r.scheme === 'PMJJBY').length;
   const apyYes = records.filter(r => r.apy === true).length;
@@ -418,61 +411,83 @@ function ReissuePassbookContent() {
       `}</style>
 
       <div className="min-h-screen bg-gray-50">
+{/* ── Sticky header ── */}
+<div className="sticky top-0 z-30 backdrop-blur bg-white/90 border-b border-gray-200">
 
-        {/* ── Sticky header ── */}
-        <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <Link href="/" className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-              </Link>
-              
-              <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-gray-900 leading-tight">Reissue Passbook</h1>
-                <p className="text-xs text-gray-400 hidden sm:block">Manage passbook reissue records</p>
-              </div>
-            </div>
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 md:py-4">
 
-            {/* Right side: Export + Add buttons */}
-            <div className="flex items-center gap-2">
-                <Link href="/customers"
-            className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition-colors shadow-sm">
-            My Customers
-          </Link>
-              {/* Excel export */}
-              <button
-                onClick={() => handleExport('excel')}
-                disabled={!!exporting}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-green-200 bg-green-50 text-green-700 text-xs font-semibold hover:bg-green-100 transition-colors disabled:opacity-50">
-                {exporting === 'excel' ? <Spinner className="h-3.5 w-3.5" /> : '📊'} Excel
-              </button>
-              {/* PDF export */}
-              <button
-                onClick={() => handleExport('pdf')}
-                disabled={!!exporting}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100 transition-colors disabled:opacity-50">
-                {exporting === 'pdf' ? <Spinner className="h-3.5 w-3.5" /> : '📄'} PDF
-              </button>
-              {/* Add button */}
-              <button
-                onClick={() => { setEditData(null); setModalOpen(true); }}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-colors">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-                <span className="hidden sm:inline">Add Reissue</span>
-                <span className="sm:hidden">Add</span>
-              </button>
-            </div>
-          </div>
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+
+      {/* LEFT SECTION */}
+      <div className="flex items-center gap-3">
+
+        {/* Back Button */}
+        <Link
+          href="/"
+          className="p-2 rounded-lg hover:bg-gray-100 
+          text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+        </Link>
+
+        {/* Icon */}
+        <div className="w-9 h-9 bg-gradient-to-br from-emerald-600 to-teal-600 
+          rounded-xl flex items-center justify-center shadow-sm">
+          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
         </div>
+
+        {/* Title */}
+        <div>
+          <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">
+            Reissue Passbook
+          </h1>
+          <p className="hidden sm:block text-xs text-gray-400">
+            Manage passbook reissue records
+          </p>
+        </div>
+      </div>
+
+      {/* RIGHT SECTION */}
+      <div className="flex items-center gap-2 w-full md:w-auto">
+
+        {/* My Customers */}
+        <Link
+          href="/customers"
+          className="flex-1 md:flex-none inline-flex items-center justify-center gap-2
+          px-3 py-2 text-xs md:text-sm font-medium
+          text-gray-700 bg-gray-100 rounded-lg
+          hover:bg-gray-200 transition-all duration-200"
+        >
+          👥
+          <span className="hidden sm:inline">Customers</span>
+        </Link>
+
+        {/* Add Reissue */}
+        <button
+          onClick={() => { setEditData(null); setModalOpen(true); }}
+          className="flex-1 md:flex-none inline-flex items-center justify-center gap-2
+          px-3 py-2 text-xs md:text-sm font-semibold
+          text-white bg-emerald-600 rounded-lg
+          hover:bg-emerald-700 active:scale-95
+          transition-all duration-200 shadow-sm"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+
+          <span className="hidden sm:inline">Add Reissue</span>
+          <span className="sm:hidden">Add</span>
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+</div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
 
@@ -496,6 +511,7 @@ function ReissuePassbookContent() {
 
           {/* ── Filters ── */}
           <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-3">
+
             {/* Search */}
             <div className="relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -509,54 +525,59 @@ function ReissuePassbookContent() {
               />
             </div>
 
-            {/* Date range */}
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              <div className="flex items-center gap-2 flex-1">
-                <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 flex-1">
-                  <span className="text-gray-400 text-xs whitespace-nowrap">From</span>
-                  <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
-                    className="text-sm text-gray-700 focus:outline-none bg-transparent flex-1" />
-                </div>
-                <span className="text-gray-400 text-xs">—</span>
-                <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 flex-1">
-                  <span className="text-gray-400 text-xs whitespace-nowrap">To</span>
-                  <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-                    className="text-sm text-gray-700 focus:outline-none bg-transparent flex-1" />
-                </div>
+            {/* Date range — column on mobile, row on sm+ */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 flex-1">
+                <span className="text-gray-400 text-xs whitespace-nowrap">From</span>
+                <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+                  className="text-sm text-gray-700 focus:outline-none bg-transparent flex-1 w-full" />
+              </div>
+              <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 flex-1">
+                <span className="text-gray-400 text-xs whitespace-nowrap">To</span>
+                <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+                  className="text-sm text-gray-700 focus:outline-none bg-transparent flex-1 w-full" />
+              </div>
+              <div className="flex gap-2">
                 <button onClick={applyDateFilter}
-                  className="px-4 py-2 bg-gray-700 text-white text-sm rounded-xl hover:bg-gray-800 font-medium whitespace-nowrap">
+                  className="flex-1 sm:flex-none px-4 py-2 bg-gray-700 text-white text-sm rounded-xl hover:bg-gray-800 font-medium">
                   Apply
                 </button>
+                {hasFilters && (
+                  <button onClick={clearFilters}
+                    className="flex-1 sm:flex-none px-3 py-2 border border-red-200 text-red-600 bg-red-50 text-sm rounded-xl hover:bg-red-100 font-medium">
+                    ✕ Clear
+                  </button>
+                )}
               </div>
-              {hasFilters && (
-                <button onClick={clearFilters}
-                  className="px-3 py-2 border border-red-200 text-red-600 bg-red-50 text-sm rounded-xl hover:bg-red-100 whitespace-nowrap font-medium">
-                  ✕ Clear
-                </button>
-              )}
             </div>
 
-            {/* Count + filter badges */}
+            {/* Active filter badges */}
+            {hasFilters && (
+              <div className="flex flex-wrap gap-1.5 pt-1 border-t border-gray-100">
+                {search   && <span className="bg-blue-50   text-blue-700   border border-blue-200   text-xs px-2.5 py-0.5 rounded-full">🔍 "{search}"</span>}
+                {fromDate && <span className="bg-orange-50 text-orange-700 border border-orange-200 text-xs px-2.5 py-0.5 rounded-full">📅 From: {fromDate}</span>}
+                {toDate   && <span className="bg-orange-50 text-orange-700 border border-orange-200 text-xs px-2.5 py-0.5 rounded-full">📅 To: {toDate}</span>}
+              </div>
+            )}
+
+            {/* Record count + Export buttons */}
             <div className="flex items-center justify-between pt-1 border-t border-gray-100">
               <p className="text-xs text-gray-400">
                 {loadingData ? 'Loading...' : `${pagination.total} record${pagination.total !== 1 ? 's' : ''}${hasFilters ? ' (filtered)' : ''}`}
               </p>
-              {hasFilters && (
-                <div className="flex flex-wrap gap-1.5">
-                  {search   && <span className="bg-blue-50   text-blue-700   border border-blue-200   text-xs px-2 py-0.5 rounded-full">🔍 "{search}"</span>}
-                  {fromDate && <span className="bg-orange-50 text-orange-700 border border-orange-200 text-xs px-2 py-0.5 rounded-full">📅 From: {fromDate}</span>}
-                  {toDate   && <span className="bg-orange-50 text-orange-700 border border-orange-200 text-xs px-2 py-0.5 rounded-full">📅 To: {toDate}</span>}
-                </div>
-              )}
+              <div className="flex gap-2">
+                <button onClick={() => handleExport('excel')} disabled={!!exporting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-green-700 text-xs font-semibold hover:bg-green-100 transition-colors disabled:opacity-50">
+                  {exporting === 'excel' ? <Spinner className="h-3.5 w-3.5" /> : '📊'} Excel
+                </button>
+                <button onClick={() => handleExport('pdf')} disabled={!!exporting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100 transition-colors disabled:opacity-50">
+                  {exporting === 'pdf' ? <Spinner className="h-3.5 w-3.5" /> : '📄'} PDF
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* Export hint when filters active */}
-          {hasFilters && (
-            <p className="text-xs text-gray-400 text-right -mt-2">
-              💡 Export will reflect active filters above
-            </p>
-          )}
+          </div>
 
           {/* ── Table ── */}
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
