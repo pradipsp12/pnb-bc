@@ -386,6 +386,7 @@ function CustomersPageContent() {
       const res  = await fetch(`/api/customers?${q}`);
       const data = await res.json();
       if (data.success) {
+        console.log('Fetched customers:', data.customers);
         setCustomers(data.customers);
         setPagination(data.pagination);
       }
@@ -739,7 +740,7 @@ function CustomersPageContent() {
                           <td className="px-4 py-3 font-mono text-gray-600 text-xs">{c.adharNo.replace(/(\d{4})(\d{4})(\d{4})/, '$1 $2 $3')}</td>
                           <td className="px-4 py-3 text-gray-600">{c.mobileNo || <span className="text-gray-300">—</span>}</td>
                           <td className="px-4 py-3"><Badge label={c.scheme} color={c.scheme === 'PMSBY' ? 'green' : 'purple'} /></td>
-                          <td className="px-4 py-3"><Badge label={c.apy} color={c.apy === 'Yes' ? 'blue' : 'orange'} /></td>
+                          <td className="px-4 py-3"><Badge label={c.apy? 'Yes' : 'No'} color={c.apy === 'Yes' ? 'blue' : 'orange'} /></td>
                           <td className="px-4 py-3">
                             {c.vip
                               ? <span className="inline-flex items-center gap-1 text-xs font-bold text-yellow-600 bg-yellow-100 border border-yellow-200 px-2 py-0.5 rounded-full">⭐ VIP</span>
