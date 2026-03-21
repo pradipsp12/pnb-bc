@@ -337,6 +337,27 @@ function Toast({ toasts }) {
   );
 }
 
+// ─── BalanceBadge ─────────────────────────────────────────────────────────────
+function BalanceBadge({ balance }) {
+  if (balance === null || balance === undefined) return null;
+  if (balance === 0) return (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200">
+      ✓ Settled
+    </span>
+  );
+  const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Math.abs(n));
+  if (balance > 0) return (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200">
+      Due {fmt(balance)}
+    </span>
+  );
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200">
+      Adv {fmt(balance)}
+    </span>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 function CustomersPageContent() {
   const router       = useRouter();
@@ -362,6 +383,8 @@ function CustomersPageContent() {
   const [exporting,   setExporting]   = useState('');
   const [toasts,      setToasts]      = useState([]);
 
+  const [balances,    setBalances]    = useState({});   // { customerId: number }
+
   const searchTimer = useRef(null);
 
   const toast = useCallback((message, type = 'success') => {
@@ -386,7 +409,6 @@ function CustomersPageContent() {
       const res  = await fetch(`/api/customers?${q}`);
       const data = await res.json();
       if (data.success) {
-        console.log('Fetched customers:', data.customers);
         setCustomers(data.customers);
         setPagination(data.pagination);
       }
@@ -398,6 +420,28 @@ function CustomersPageContent() {
   }, [page, limit, search, schemeFilter, apyFilter, vipFilter, fromDate, toDate, toast]);
 
   useEffect(() => { fetchCustomers(); }, [page, limit, schemeFilter, apyFilter, vipFilter]);
+
+  // Fetch transaction balances for all visible customers
+  useEffect(() => {
+    if (!customers.length) return;
+    let cancelled = false;
+    const fetchBalances = async () => {
+      const entries = await Promise.all(
+        customers.map(async (c) => {
+          try {
+            const res  = await fetch(`/api/transactions?customerId=${c._id}`);
+            const data = await res.json();
+            return [c._id, data.balance ?? 0];
+          } catch {
+            return [c._id, 0];
+          }
+        })
+      );
+      if (!cancelled) setBalances(Object.fromEntries(entries));
+    };
+    fetchBalances();
+    return () => { cancelled = true; };
+  }, [customers]);
 
   const handleSearch = (val) => {
     setSearch(val);
@@ -733,7 +777,12 @@ function CustomersPageContent() {
                               <div className="w-8 h-8 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center text-blue-700 font-bold text-xs flex-shrink-0 transition-colors">
                                 {c.customerName.charAt(0).toUpperCase()}
                               </div>
-                              <span className="font-medium text-gray-900 group-hover:text-blue-600 truncate max-w-[140px] transition-colors">{c.customerName}</span>
+                              <div className="min-w-0">
+                                <span className="font-medium text-gray-900 group-hover:text-blue-600 truncate max-w-[140px] transition-colors block">{c.customerName}</span>
+                                {balances[c._id] !== undefined && balances[c._id] !== 0 && (
+                                  <BalanceBadge balance={balances[c._id]} />
+                                )}
+                              </div>
                             </Link>
                           </td>
                           <td className="px-4 py-3 font-mono text-gray-700 text-xs">{c.accountNo}</td>
@@ -792,7 +841,12 @@ function CustomersPageContent() {
                           </div>
                           <div className="min-w-0">
                             <Link href={`/customers/${c._id}/transactions`} className="font-semibold text-gray-900 hover:text-blue-600 transition-colors truncate block">{c.customerName}</Link>
-                            <p className="text-xs font-mono text-gray-500">{c.accountNo}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <p className="text-xs font-mono text-gray-500">{c.accountNo}</p>
+                              {balances[c._id] !== undefined && balances[c._id] !== 0 && (
+                                <BalanceBadge balance={balances[c._id]} />
+                              )}
+                            </div>
                           </div>
                         </div>
                         <div className="flex gap-1 flex-shrink-0">
