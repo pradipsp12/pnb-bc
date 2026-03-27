@@ -422,26 +422,16 @@ function CustomersPageContent() {
   useEffect(() => { fetchCustomers(); }, [page, limit, schemeFilter, apyFilter, vipFilter]);
 
   // Fetch transaction balances for all visible customers
-  useEffect(() => {
-    if (!customers.length) return;
-    let cancelled = false;
-    const fetchBalances = async () => {
-      const entries = await Promise.all(
-        customers.map(async (c) => {
-          try {
-            const res  = await fetch(`/api/transactions?customerId=${c._id}`);
-            const data = await res.json();
-            return [c._id, data.balance ?? 0];
-          } catch {
-            return [c._id, 0];
-          }
-        })
-      );
-      if (!cancelled) setBalances(Object.fromEntries(entries));
-    };
-    fetchBalances();
-    return () => { cancelled = true; };
-  }, [customers]);
+ useEffect(() => {
+  if (!customers.length) { setBalances({}); return; }
+  let cancelled = false;
+  const ids = customers.map(c => c._id).join(',');
+  fetch(`/api/transactions/balances?ids=${ids}`)
+    .then(r => r.json())
+    .then(data => { if (!cancelled && data.balances) setBalances(data.balances); })
+    .catch(() => {});
+  return () => { cancelled = true; };
+}, [customers]);
 
   const handleSearch = (val) => {
     setSearch(val);
@@ -620,7 +610,7 @@ function CustomersPageContent() {
               { label: 'Total',   value: pagination.total,                                    icon: '👥', color: 'blue'   },
               { label: 'PMSBY',   value: customers.filter(c => c.scheme === 'PMSBY').length,  icon: '🛡️', color: 'green'  },
               { label: 'PMJJBY', value: customers.filter(c => c.scheme === 'PMJJBY').length, icon: '❤️', color: 'purple' },
-              { label: 'APY Yes', value: customers.filter(c => c.apy === 'Yes').length,       icon: '✅', color: 'orange' },
+              { label: 'APY Yes', value: customers.filter(c => c.apy === true).length,       icon: '✅', color: 'orange' },
             ].map(({ label, value, icon, color }) => {
               const bg  = { blue: 'bg-blue-50 border-blue-100', green: 'bg-green-50 border-green-100', purple: 'bg-purple-50 border-purple-100', orange: 'bg-orange-50 border-orange-100' };
               const txt = { blue: 'text-blue-700', green: 'text-green-700', purple: 'text-purple-700', orange: 'text-orange-700' };
