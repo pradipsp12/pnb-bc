@@ -15,6 +15,7 @@ const EMPTY_FORM = {
   mobileNo:     '',
   scheme:       '',
   apy:          '',
+  resetDate: '', 
 };
 
 // ─── Badge ────────────────────────────────────────────────────────────────────
@@ -111,6 +112,10 @@ function ReissueModal({ isOpen, onClose, onSaved, editData }) {
         mobileNo:     editData.mobileNo     || '',
         scheme:       editData.scheme       || '',
         apy:          editData.apy === true ? 'Yes' : (editData.apy === false ? 'No' : ''),
+        // resetDate drives checkbox: if date stored → checkbox auto-checked
+          resetDate: editData.resetDate
+          ? new Date(editData.resetDate).toISOString().split('T')[0]
+          : '',
       } : EMPTY_FORM);
       setErrors({});
       setApiErr('');
@@ -227,6 +232,65 @@ function ReissueModal({ isOpen, onClose, onSaved, editData }) {
             <SelectField label="Scheme" name="scheme" value={form.scheme} onChange={handleChange} errors={errors} options={SCHEMES} placeholder="Select scheme"  />
             <SelectField label="APY"    name="apy"    value={form.apy}    onChange={handleChange} errors={errors} options={APY_OPTS} placeholder="Select"         />
           </div>
+        </div>
+
+                {/* Reset Required — checkbox state derived from resetDate; no separate boolean stored */}
+        <div className="px-6 pb-4 space-y-3">
+          <label className="flex items-center gap-3 cursor-pointer group select-none p-3 rounded-xl border border-gray-200 hover:border-orange-300 hover:bg-orange-50/40 transition-all">
+            <div className="relative flex-shrink-0">
+              <input
+                type="checkbox"
+                checked={!!form.resetDate}
+                onChange={e => {
+                  if (e.target.checked) {
+                    // auto set today's date (optional)
+                    const today = new Date().toISOString().split('T')[0];
+                    handleChange('resetDate', today);
+                  } else {
+                    handleChange('resetDate', '');
+                  }
+                }}
+                className="sr-only"
+              />
+              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors
+                ${!!form.resetDate ? 'bg-orange-500 border-orange-500' : 'border-gray-300 bg-white group-hover:border-orange-300'}`}>
+                {!!form.resetDate && (
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-700">🔄 Reset Required</p>
+              <p className="text-xs text-gray-400">Tick and pick a date to mark reset required</p>
+            </div>
+            {!!form.resetDate && (
+              <span className="text-xs font-bold text-orange-600 bg-orange-100 border border-orange-200 px-2 py-0.5 rounded-full flex-shrink-0">
+                Required
+              </span>
+            )}
+          </label>
+ 
+          {/* Animated Reset Date Field */}
+            <div
+              className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                form.resetDate ? 'max-h-40 opacity-100 mt-2' : 'max-h-0 opacity-0'
+              }`}
+            >
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Reset Date
+                </label>
+                <input
+                  type="date"
+                  value={form.resetDate}
+                  onChange={e => handleChange('resetDate', e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none transition-all
+                    border-orange-300 bg-orange-50 focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                />
+              </div>
+            </div>
         </div>
 
         {/* Footer */}
@@ -587,7 +651,7 @@ function ReissuePassbookContent() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    {['#', 'Customer Name', 'Account No', 'Aadhaar No', 'Mobile No', 'Scheme', 'APY', 'Added On', 'Actions'].map(h => (
+                    {['#', 'Customer Name', 'Account No', 'Aadhaar No', 'Mobile No', 'Scheme', 'APY', 'Reset Date', 'Added On', 'Actions'].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -638,6 +702,13 @@ function ReissuePassbookContent() {
                           </td>
                           <td className="px-4 py-3">
                             <Badge label={r.apy === true ? 'Yes' : 'No'} color={r.apy === true ? 'blue' : 'orange'} />
+                          </td>
+                          <td className="px-4 py-3">
+                            {r.resetDate
+                              ? <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200">
+                                  🔄 {new Date(r.resetDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </span>
+                              : <span className="text-gray-300 text-xs">—</span>}
                           </td>
                           <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
                             {new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -710,6 +781,11 @@ function ReissuePassbookContent() {
                       <div className="flex items-center gap-2 mt-2">
                         {r.scheme && <Badge label={r.scheme} color={r.scheme === 'PMSBY' ? 'green' : 'purple'} />}
                         <Badge label={`APY: ${r.apy === true ? 'Yes' : 'No'}`} color={r.apy === true ? 'blue' : 'orange'} />
+                        {r.resetDate && (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200">
+                            🔄 {new Date(r.resetDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
+                        )}
                         <span className="text-xs text-gray-400 ml-auto">
                           {new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
                         </span>

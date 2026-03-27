@@ -1,6 +1,6 @@
 // app/api/reissue-passbook/export/route.js
 import { NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb'; 
+import connectDB from '@/lib/mongodb';
 import ReissuePassbook from '@/lib/models/ReissuePassbook';
 
 export const dynamic = 'force-dynamic';
@@ -67,10 +67,11 @@ export async function GET(request) {
       { header: 'S.No',          key: 'sno',          width: 7  },
       { header: 'Customer Name', key: 'customerName',  width: 25 },
       { header: 'Account No',    key: 'accountNo',     width: 18 },
-      { header: 'Aadhaar No',    key: 'adharNo',       width: 18 },
-      { header: 'Mobile No',     key: 'mobileNo',      width: 15 },
-      { header: 'Scheme',        key: 'scheme',        width: 12 },
-      { header: 'APY',           key: 'apy',           width: 8  },
+     // { header: 'Aadhaar No',    key: 'adharNo',       width: 18 },
+     // { header: 'Mobile No',     key: 'mobileNo',      width: 15 },
+     // { header: 'Scheme',        key: 'scheme',        width: 12 },
+     // { header: 'APY',           key: 'apy',           width: 8  },
+      { header: 'Reset Date',    key: 'resetDate',     width: 15 },
       { header: 'Added On',      key: 'createdAt',     width: 18 },
     ];
 
@@ -85,13 +86,16 @@ export async function GET(request) {
 
     records.forEach((r, i) => {
       const row = ws.addRow({
-        sno:         i + 1,
+        sno:          i + 1,
         customerName: r.customerName,
         accountNo:    r.accountNo,
-        adharNo:      maskAadhar(r.adharNo),          // ← masked
-        mobileNo:     r.mobileNo  || '—',
-        scheme:       r.scheme    || '—',
-        apy:          r.apy ? 'Yes' : 'No',            // ← bool → Yes/No
+      //  adharNo:      maskAadhar(r.adharNo),
+      // mobileNo:     r.mobileNo || '—',
+      // scheme:       r.scheme   || '—',
+      // apy:          r.apy ? 'Yes' : 'No',
+        resetDate:    r.resetDate
+                        ? new Date(r.resetDate).toLocaleDateString('en-IN')
+                        : '—',
         createdAt:    new Date(r.createdAt).toLocaleDateString('en-IN'),
       });
       if (i % 2 === 0) {
@@ -105,7 +109,7 @@ export async function GET(request) {
       row.height = 22;
     });
 
-    ws.autoFilter = { from: 'A1', to: 'H1' };
+    ws.autoFilter = { from: 'A1', to: 'E1' };
 
     const buffer = await wb.xlsx.writeBuffer();
     return new NextResponse(buffer, {
@@ -162,20 +166,22 @@ export async function GET(request) {
       // Header cells
       thSno:     { width: '5%',  padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
       thName:    { width: '22%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
-      thAccount: { width: '15%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
-      thAadhar:  { width: '16%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
-      thMobile:  { width: '13%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
-      thScheme:  { width: '11%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      thAccount: { width: '14%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      thAadhar:  { width: '14%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      thMobile:  { width: '12%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      thScheme:  { width: '10%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
       thApy:     { width: '7%',  padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      thResetDt: { width: '12%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
       thDate:    { width: '11%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
       // Data cells
       tdSno:     { width: '5%',  padding: '3 3', fontSize: 7, color: '#6B7280', textAlign: 'center' },
       tdName:    { width: '22%', padding: '3 3', fontSize: 7, color: '#111827', textAlign: 'left'   },
-      tdAccount: { width: '15%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
-      tdAadhar:  { width: '16%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
-      tdMobile:  { width: '13%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
-      tdScheme:  { width: '11%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
+      tdAccount: { width: '14%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
+      tdAadhar:  { width: '14%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
+      tdMobile:  { width: '12%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
+      tdScheme:  { width: '10%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
       tdApy:     { width: '7%',  padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
+      tdResetDt: { width: '12%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
       tdDate:    { width: '11%', padding: '3 3', fontSize: 7, color: '#6B7280', textAlign: 'center' },
       footer: {
         position:          'absolute',
@@ -205,10 +211,11 @@ export async function GET(request) {
               <Text style={styles.thSno}>#</Text>
               <Text style={styles.thName}>Customer Name</Text>
               <Text style={styles.thAccount}>Account No</Text>
-              <Text style={styles.thAadhar}>Aadhaar No</Text>
+              {/* <Text style={styles.thAadhar}>Aadhaar No</Text>
               <Text style={styles.thMobile}>Mobile No</Text>
               <Text style={styles.thScheme}>Scheme</Text>
-              <Text style={styles.thApy}>APY</Text>
+              <Text style={styles.thApy}>APY</Text> */}
+              <Text style={styles.thResetDt}>Reset Date</Text>
               <Text style={styles.thDate}>Added On</Text>
             </View>
 
@@ -221,10 +228,15 @@ export async function GET(request) {
                 <Text style={styles.tdSno}>{i + 1}</Text>
                 <Text style={styles.tdName}>{r.customerName}</Text>
                 <Text style={styles.tdAccount}>{r.accountNo}</Text>
-                <Text style={styles.tdAadhar}>{maskAadhar(r.adharNo)}</Text>
+                {/* <Text style={styles.tdAadhar}>{maskAadhar(r.adharNo)}</Text>
                 <Text style={styles.tdMobile}>{r.mobileNo || '—'}</Text>
                 <Text style={styles.tdScheme}>{r.scheme   || '—'}</Text>
-                <Text style={styles.tdApy}>{r.apy ? 'Yes' : 'No'}</Text>
+                <Text style={styles.tdApy}>{r.apy ? 'Yes' : 'No'}</Text> */}
+                <Text style={styles.tdResetDt}>
+                  {r.resetDate
+                    ? new Date(r.resetDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : '—'}
+                </Text>
                 <Text style={styles.tdDate}>
                   {new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </Text>
