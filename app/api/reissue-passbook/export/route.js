@@ -5,7 +5,6 @@ import ReissuePassbook from '@/lib/models/ReissuePassbook';
 
 export const dynamic = 'force-dynamic';
 
-// ── Aadhaar masking: XXXX XXXX 1342 ──────────────────────────────────────────
 const maskAadhar = (a) => {
   if (!a || a.length < 12) return a || '—';
   return `XXXX XXXX ${a.slice(-4)}`;
@@ -20,36 +19,25 @@ export async function GET(request) {
   const fromDate = searchParams.get('fromDate') || '';
   const toDate   = searchParams.get('toDate')   || '';
 
-  // ── Build query — mirrors the GET list route exactly ─────────────────────
   const query = {};
-
   if (search.trim()) {
     const re = { $regex: search.trim(), $options: 'i' };
-    query.$or = [
-      { customerName: re },
-      { accountNo:    re },
-      { mobileNo:     re },
-      { adharNo:      re },
-    ];
+    query.$or = [{ customerName: re }, { accountNo: re }, { mobileNo: re }, { adharNo: re }];
   }
-
   if (fromDate || toDate) {
     query.createdAt = {};
     if (fromDate) query.createdAt.$gte = new Date(`${fromDate}T00:00:00.000Z`);
     if (toDate)   query.createdAt.$lte = new Date(`${toDate}T23:59:59.999Z`);
   }
 
-  const records = await ReissuePassbook.find(query)
-    .sort({ createdAt: -1 })
-    .lean();
+  const records = await ReissuePassbook.find(query).sort({ createdAt: -1 }).lean();
 
-  // ── Active filter summary line (for PDF subtitle) ─────────────────────────
   const filterParts = [
     `Generated: ${new Date().toLocaleString('en-IN')}`,
     `Total: ${records.length}`,
-    search   ? `Search: "${search}"`     : null,
-    fromDate ? `From: ${fromDate}`       : null,
-    toDate   ? `To: ${toDate}`           : null,
+    search   ? `Search: "${search}"` : null,
+    fromDate ? `From: ${fromDate}`   : null,
+    toDate   ? `To: ${toDate}`       : null,
   ].filter(Boolean).join('   |   ');
 
   // ── Excel ─────────────────────────────────────────────────────────────────
@@ -59,23 +47,21 @@ export async function GET(request) {
     wb.creator = 'PNB Form Data Extractor';
     wb.created = new Date();
 
-    const ws = wb.addWorksheet('Reissue Passbook', {
-      pageSetup: { orientation: 'landscape' },
-    });
+    const ws = wb.addWorksheet('Reissue Passbook', { pageSetup: { orientation: 'landscape' } });
 
     ws.columns = [
-      { header: 'S.No',          key: 'sno',          width: 7  },
-      { header: 'Customer Name', key: 'customerName',  width: 25 },
-      { header: 'Account No',    key: 'accountNo',     width: 18 },
-     // { header: 'Aadhaar No',    key: 'adharNo',       width: 18 },
-     // { header: 'Mobile No',     key: 'mobileNo',      width: 15 },
-     // { header: 'Scheme',        key: 'scheme',        width: 12 },
-     // { header: 'APY',           key: 'apy',           width: 8  },
-      { header: 'Reset Date',    key: 'resetDate',     width: 15 },
-      { header: 'Added On',      key: 'createdAt',     width: 18 },
+      { header: 'S.No',                  key: 'sno',                 width: 7  },
+      { header: 'Customer Name',         key: 'customerName',        width: 25 },
+      { header: 'Account No',            key: 'accountNo',           width: 18 },
+      // { header: 'Aadhaar No',         key: 'adharNo',             width: 18 },
+      // { header: 'Mobile No',          key: 'mobileNo',            width: 15 },
+      // { header: 'Scheme',             key: 'scheme',              width: 12 },
+      // { header: 'APY',                key: 'apy',                 width: 8  },
+      { header: 'Reset Date',            key: 'resetDate',           width: 16 },
+      { header: 'New Passbook Required', key: 'newPassbookRequired', width: 22 },
+      { header: 'Added On',              key: 'createdAt',           width: 18 },
     ];
 
-    // Header row styling — identical to customer export
     ws.getRow(1).eachCell((cell) => {
       cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1D4ED8' } };
       cell.font      = { bold: true, color: { argb: 'FFFFFF' }, size: 11 };
@@ -86,30 +72,30 @@ export async function GET(request) {
 
     records.forEach((r, i) => {
       const row = ws.addRow({
-        sno:          i + 1,
-        customerName: r.customerName,
-        accountNo:    r.accountNo,
-      //  adharNo:      maskAadhar(r.adharNo),
-      // mobileNo:     r.mobileNo || '—',
-      // scheme:       r.scheme   || '—',
-      // apy:          r.apy ? 'Yes' : 'No',
-        resetDate:    r.resetDate
-                        ? new Date(r.resetDate).toLocaleDateString('en-IN')
-                        : '—',
-        createdAt:    new Date(r.createdAt).toLocaleDateString('en-IN'),
+        sno:                 i + 1,
+        customerName:        r.customerName,
+        accountNo:           r.accountNo,
+        // adharNo:          maskAadhar(r.adharNo),
+        // mobileNo:         r.mobileNo || '—',
+        // scheme:           r.scheme   || '—',
+        // apy:              r.apy ? 'Yes' : 'No',
+        resetDate:           r.resetDate
+                               ? new Date(r.resetDate).toLocaleDateString('en-IN')
+                               : '—',
+        // newPassbookRequired: Yes if true, blank if false
+        newPassbookRequired: r.newPassbookRequired ? 'Yes' : '',
+        createdAt:           new Date(r.createdAt).toLocaleDateString('en-IN'),
       });
       if (i % 2 === 0) {
-        row.eachCell((cell) => {
+        row.eachCell(cell => {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'EFF6FF' } };
         });
       }
-      row.eachCell((cell) => {
-        cell.alignment = { vertical: 'middle', horizontal: 'center' };
-      });
+      row.eachCell(cell => { cell.alignment = { vertical: 'middle', horizontal: 'center' }; });
       row.height = 22;
     });
 
-    ws.autoFilter = { from: 'A1', to: 'E1' };
+    ws.autoFilter = { from: 'A1', to: 'F1' };
 
     const buffer = await wb.xlsx.writeBuffer();
     return new NextResponse(buffer, {
@@ -122,77 +108,53 @@ export async function GET(request) {
 
   // ── PDF ───────────────────────────────────────────────────────────────────
   if (format === 'pdf') {
-    const {
-      Document, Page, Text, View, StyleSheet, renderToBuffer, Font,
-    } = await import('@react-pdf/renderer');
+    const { Document, Page, Text, View, StyleSheet, renderToBuffer, Font } =
+      await import('@react-pdf/renderer');
 
     Font.register({ family: 'Helvetica', fonts: [] });
 
+    // ── Active columns: sno + name + account + resetDt + newPb + date = 100%
+    // ── Commented columns kept in styles so you can re-enable them by
+    //    uncommenting both the style entry AND the matching <Text> in JSX.
+    // ── When all 10 columns are active the widths also sum to 100%.
     const styles = StyleSheet.create({
-      page: {
-        flexDirection:   'column',
-        backgroundColor: '#FFFFFF',
-        padding:         30,
-        fontFamily:      'Helvetica',
-      },
-      titleSection: {
-        marginBottom:  16,
-        borderBottom:  '2px solid #1D4ED8',
-        paddingBottom: 10,
-      },
-      title: {
-        fontSize:    20,
-        fontFamily:  'Helvetica-Bold',
-        color:       '#1D4ED8',
-        marginBottom: 3,
-      },
-      subtitle: { fontSize: 9, color: '#6B7280' },
-      table:    { width: '100%' },
-      tableHeaderRow: {
-        flexDirection:   'row',
-        backgroundColor: '#1D4ED8',
-        borderRadius:    4,
-        marginBottom:    2,
-      },
-      tableRow: {
-        flexDirection:    'row',
-        borderBottomWidth: 1,
-        borderBottomColor: '#F3F4F6',
-        minHeight:         24,
-        alignItems:        'center',
-      },
-      tableRowEven: { backgroundColor: '#EFF6FF' },
-      tableRowOdd:  { backgroundColor: '#FFFFFF'  },
-      // Header cells
-      thSno:     { width: '5%',  padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
-      thName:    { width: '22%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
-      thAccount: { width: '14%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
-      thAadhar:  { width: '14%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
-      thMobile:  { width: '12%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
-      thScheme:  { width: '10%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
-      thApy:     { width: '7%',  padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
-      thResetDt: { width: '12%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
-      thDate:    { width: '11%', padding: '4 3', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
-      // Data cells
-      tdSno:     { width: '5%',  padding: '3 3', fontSize: 7, color: '#6B7280', textAlign: 'center' },
-      tdName:    { width: '22%', padding: '3 3', fontSize: 7, color: '#111827', textAlign: 'left'   },
-      tdAccount: { width: '14%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
-      tdAadhar:  { width: '14%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
-      tdMobile:  { width: '12%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
-      tdScheme:  { width: '10%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
-      tdApy:     { width: '7%',  padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
-      tdResetDt: { width: '12%', padding: '3 3', fontSize: 7, color: '#374151', textAlign: 'center' },
-      tdDate:    { width: '11%', padding: '3 3', fontSize: 7, color: '#6B7280', textAlign: 'center' },
-      footer: {
-        position:          'absolute',
-        bottom:            20,
-        left:              30,
-        right:             30,
-        flexDirection:     'row',
-        justifyContent:    'space-between',
-        borderTop:         '1px solid #E5E7EB',
-        paddingTop:        6,
-      },
+      page:           { flexDirection: 'column', backgroundColor: '#FFFFFF', padding: 30, fontFamily: 'Helvetica' },
+      titleSection:   { marginBottom: 16, borderBottom: '2px solid #1D4ED8', paddingBottom: 10 },
+      title:          { fontSize: 20, fontFamily: 'Helvetica-Bold', color: '#1D4ED8', marginBottom: 3 },
+      subtitle:       { fontSize: 9, color: '#6B7280' },
+      table:          { width: '100%' },
+      tableHeaderRow: { flexDirection: 'row', backgroundColor: '#1D4ED8', borderRadius: 4, marginBottom: 2 },
+      tableRow:       { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', minHeight: 24, alignItems: 'center' },
+      tableRowEven:   { backgroundColor: '#EFF6FF' },
+      tableRowOdd:    { backgroundColor: '#FFFFFF' },
+
+      // ── Header cells ──────────────────────────────────────────────────────
+      // Active (total = 100%): 7+30+19+16+14+14 = 100
+      thSno:     { width: '7%',  padding: '5 3', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      thName:    { width: '30%', padding: '5 3', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      thAccount: { width: '19%', padding: '5 3', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      // Commented — re-enable by adjusting widths above to make room:
+      // thAadhar:  { width: '13%', padding: '5 2', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      // thMobile:  { width: '11%', padding: '5 2', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      // thScheme:  { width: '8%',  padding: '5 2', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      // thApy:     { width: '6%',  padding: '5 2', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      thResetDt: { width: '16%', padding: '5 3', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      thNewPb:   { width: '14%', padding: '5 3', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+      thDate:    { width: '14%', padding: '5 3', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+
+      // ── Data cells (same widths as header) ────────────────────────────────
+      tdSno:     { width: '7%',  padding: '4 3', fontSize: 8, color: '#6B7280', textAlign: 'center' },
+      tdName:    { width: '30%', padding: '4 3', fontSize: 8, color: '#111827', textAlign: 'left'   },
+      tdAccount: { width: '19%', padding: '4 3', fontSize: 8, color: '#374151', textAlign: 'center' },
+      // tdAadhar:  { width: '13%', padding: '4 2', fontSize: 7, color: '#374151', textAlign: 'center' },
+      // tdMobile:  { width: '11%', padding: '4 2', fontSize: 7, color: '#374151', textAlign: 'center' },
+      // tdScheme:  { width: '8%',  padding: '4 2', fontSize: 7, color: '#374151', textAlign: 'center' },
+      // tdApy:     { width: '6%',  padding: '4 2', fontSize: 7, color: '#374151', textAlign: 'center' },
+      tdResetDt: { width: '16%', padding: '4 3', fontSize: 8, color: '#374151', textAlign: 'center' },
+      tdNewPb:   { width: '14%', padding: '4 3', fontSize: 8, color: '#374151', textAlign: 'center' },
+      tdDate:    { width: '14%', padding: '4 3', fontSize: 8, color: '#6B7280', textAlign: 'center' },
+
+      footer:     { position: 'absolute', bottom: 20, left: 30, right: 30, flexDirection: 'row', justifyContent: 'space-between', borderTop: '1px solid #E5E7EB', paddingTop: 6 },
       footerText: { fontSize: 7, color: '#9CA3AF' },
     });
 
@@ -206,37 +168,37 @@ export async function GET(request) {
           </View>
 
           <View style={styles.table}>
-            {/* Header */}
+            {/* ── Header row ── */}
             <View style={styles.tableHeaderRow}>
               <Text style={styles.thSno}>#</Text>
               <Text style={styles.thName}>Customer Name</Text>
               <Text style={styles.thAccount}>Account No</Text>
-              {/* <Text style={styles.thAadhar}>Aadhaar No</Text>
-              <Text style={styles.thMobile}>Mobile No</Text>
-              <Text style={styles.thScheme}>Scheme</Text>
-              <Text style={styles.thApy}>APY</Text> */}
+              {/* <Text style={styles.thAadhar}>Aadhaar No</Text>  */}
+              {/* <Text style={styles.thMobile}>Mobile No</Text>   */}
+              {/* <Text style={styles.thScheme}>Scheme</Text>      */}
+              {/* <Text style={styles.thApy}>APY</Text>            */}
               <Text style={styles.thResetDt}>Reset Date</Text>
+              <Text style={styles.thNewPb}>New Passbook</Text>
               <Text style={styles.thDate}>Added On</Text>
             </View>
 
-            {/* Rows */}
+            {/* ── Data rows ── */}
             {records.map((r, i) => (
-              <View
-                key={String(r._id)}
-                style={[styles.tableRow, i % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd]}
-              >
+              <View key={String(r._id)} style={[styles.tableRow, i % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd]}>
                 <Text style={styles.tdSno}>{i + 1}</Text>
                 <Text style={styles.tdName}>{r.customerName}</Text>
                 <Text style={styles.tdAccount}>{r.accountNo}</Text>
-                {/* <Text style={styles.tdAadhar}>{maskAadhar(r.adharNo)}</Text>
-                <Text style={styles.tdMobile}>{r.mobileNo || '—'}</Text>
-                <Text style={styles.tdScheme}>{r.scheme   || '—'}</Text>
-                <Text style={styles.tdApy}>{r.apy ? 'Yes' : 'No'}</Text> */}
+                {/* <Text style={styles.tdAadhar}>{maskAadhar(r.adharNo)}</Text> */}
+                {/* <Text style={styles.tdMobile}>{r.mobileNo || '—'}</Text>     */}
+                {/* <Text style={styles.tdScheme}>{r.scheme   || '—'}</Text>     */}
+                {/* <Text style={styles.tdApy}>{r.apy ? 'Yes' : 'No'}</Text>     */}
                 <Text style={styles.tdResetDt}>
                   {r.resetDate
                     ? new Date(r.resetDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
                     : '—'}
                 </Text>
+                {/* Yes if required, blank if not */}
+                <Text style={styles.tdNewPb}>{r.newPassbookRequired ? 'Yes' : ''}</Text>
                 <Text style={styles.tdDate}>
                   {new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </Text>
@@ -246,10 +208,7 @@ export async function GET(request) {
 
           <View style={styles.footer} fixed>
             <Text style={styles.footerText}>PNB Form Data Extractor — Reissue Passbook</Text>
-            <Text
-              style={styles.footerText}
-              render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
-            />
+            <Text style={styles.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
           </View>
 
         </Page>
@@ -265,8 +224,5 @@ export async function GET(request) {
     });
   }
 
-  return NextResponse.json(
-    { success: false, error: 'Invalid format. Use ?format=pdf or ?format=excel' },
-    { status: 400 }
-  );
+  return NextResponse.json({ success: false, error: 'Invalid format. Use ?format=pdf or ?format=excel' }, { status: 400 });
 }

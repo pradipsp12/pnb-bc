@@ -16,6 +16,7 @@ const EMPTY_FORM = {
   scheme:       '',
   apy:          '',
   resetDate: '', 
+  newPassbookRequired: false,
 };
 
 // ─── Badge ────────────────────────────────────────────────────────────────────
@@ -116,6 +117,7 @@ function ReissueModal({ isOpen, onClose, onSaved, editData }) {
           resetDate: editData.resetDate
           ? new Date(editData.resetDate).toISOString().split('T')[0]
           : '',
+          newPassbookRequired: !!editData.newPassbookRequired,
       } : EMPTY_FORM);
       setErrors({});
       setApiErr('');
@@ -291,6 +293,40 @@ function ReissueModal({ isOpen, onClose, onSaved, editData }) {
                 />
               </div>
             </div>
+ {/* New Passbook Required checkbox */}
+
+            <div className="px-6 pb-4">
+          <label className="flex items-center gap-3 cursor-pointer group select-none p-3 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/40 transition-all">
+            <div className="relative flex-shrink-0">
+              <input
+                type="checkbox"
+                checked={!!form.newPassbookRequired}
+                onChange={e => handleChange('newPassbookRequired', e.target.checked)}
+                className="sr-only"
+              />
+              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors
+                ${form.newPassbookRequired
+                  ? 'bg-blue-600 border-blue-600'
+                  : 'border-gray-300 bg-white group-hover:border-blue-300'}`}>
+                {form.newPassbookRequired && (
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-700">📒 New Passbook Required</p>
+              <p className="text-xs text-gray-400">Mark if a new passbook needs to be issued</p>
+            </div>
+            {form.newPassbookRequired && (
+              <span className="text-xs font-bold text-blue-600 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full flex-shrink-0">
+                Required
+              </span>
+            )}
+          </label>
+        </div>
+
         </div>
 
         {/* Footer */}
@@ -651,7 +687,7 @@ function ReissuePassbookContent() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    {['#', 'Customer Name', 'Account No', 'Aadhaar No', 'Mobile No', 'Scheme', 'APY', 'Reset Date', 'Added On', 'Actions'].map(h => (
+                    {['#', 'Customer Name', 'Account No', 'Aadhaar No', 'Mobile No', 'Scheme', 'APY', 'Reset Date','New PB', 'Added On', 'Actions'].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -670,7 +706,7 @@ function ReissuePassbookContent() {
                     : records.length === 0
                       ? (
                         <tr>
-                          <td colSpan={9} className="text-center py-16">
+                          <td colSpan={10} className="text-center py-16">
                             <div className="text-5xl mb-3">📗</div>
                             <p className="text-gray-500 font-medium">No reissue records found</p>
                             <p className="text-gray-400 text-xs mt-1">
@@ -709,6 +745,10 @@ function ReissuePassbookContent() {
                                   🔄 {new Date(r.resetDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                                 </span>
                               : <span className="text-gray-300 text-xs">—</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            {r.newPassbookRequired ? <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200">📒 Yes</span>
+                            : <span className="text-gray-300 text-xs">—</span>}
                           </td>
                           <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
                             {new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -778,13 +818,15 @@ function ReissuePassbookContent() {
                           <p className="text-xs text-gray-700">{r.mobileNo || '—'}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 mt-2">
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
                         {r.scheme && <Badge label={r.scheme} color={r.scheme === 'PMSBY' ? 'green' : 'purple'} />}
                         <Badge label={`APY: ${r.apy === true ? 'Yes' : 'No'}`} color={r.apy === true ? 'blue' : 'orange'} />
                         {r.resetDate && (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200">
                             🔄 {new Date(r.resetDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </span>
+                        )}
+                        {r.newPassbookRequired && (<span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200">📒 New PB</span>
                         )}
                         <span className="text-xs text-gray-400 ml-auto">
                           {new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}

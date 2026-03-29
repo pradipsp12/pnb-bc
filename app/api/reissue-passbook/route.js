@@ -16,6 +16,10 @@ function sanitizeBody(body) {
   if ('resetDate' in clean) {
     clean.resetDate = clean.resetDate ? new Date(clean.resetDate) : null;
   }
+  if ('newPassbookRequired' in clean) {
+    const v = clean.newPassbookRequired;
+    clean.newPassbookRequired = v === true || v === 'true' || v === 1 || v === '1';
+  }
   // Strip resetRequired — it's frontend-only, never stored
   delete clean.resetRequired;
   return clean;
