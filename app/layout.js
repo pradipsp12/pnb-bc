@@ -2,8 +2,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'PNB Account Form Scraper',
-  description: 'Upload PNB account opening forms and extract data to MongoDB & Google Sheets',
+  title: 'PNB-BC CRM',
+  description: 'A CRM system for PNB-BC',
 };
 
 export default function RootLayout({ children }) {

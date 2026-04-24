@@ -796,7 +796,7 @@ function ReissuePassbookContent() {
                           </div>
                           <div className="min-w-0">
                             <p className="font-semibold text-gray-900 truncate">{r.customerName}</p>
-                            <p className="text-xs font-mono text-gray-500">{r.accountNo}</p>
+                            <p className="text-lg font-mono text-gray-500">{r.accountNo}</p>
                           </div>
                         </div>
                         <div className="flex gap-1 flex-shrink-0">
