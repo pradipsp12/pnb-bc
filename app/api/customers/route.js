@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Customer from '@/lib/models/Customer';
+import { createGoogleContact } from "@/lib/google/people";
 
 // Helper — sanitize body so boolean fields are always boolean regardless of what comes in
 function sanitizeBody(body) {
@@ -100,6 +101,15 @@ export async function POST(request) {
     const raw      = await request.json();
     const body     = sanitizeBody(raw);
     const customer = await Customer.create(body);
+    // Save contact to Google Contacts
+      try {
+        await createGoogleContact(
+          `${customer.customerName} - PNB Customer`,
+          customer.mobileNo
+        );
+      } catch (err) {
+        console.error("Google Contact Error:", err.message);
+      }
     return NextResponse.json({ success: true, customer }, { status: 201 });
   } catch (err) {
     if (err.code === 11000) {
