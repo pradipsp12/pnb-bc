@@ -105,13 +105,15 @@ export async function POST(request) {
       });
       customerStatus = 'added'; // newly added to Customer collection
       try {
-        await createGoogleContact(
-          `${body.customerName} - PNB Customer`,
-          body.mobileNo
-        );
+        await createGoogleContact({
+          customerName: body.customerName,
+          accountNo:    body.accountNo,
+          adharNo:      body.adharNo,
+          mobileNo:     body.mobileNo || null,
+        });
       } catch (err) {
         console.error("Google Contact Error:", err.message);
-      } 
+      }
     }
 
     return NextResponse.json(

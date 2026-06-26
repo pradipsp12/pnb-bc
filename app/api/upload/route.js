@@ -87,11 +87,15 @@ export async function POST(request) {
         apy:          apy,               // bool → 'Yes'/'No' enum
       });
       console.log('Saved to Customer collection:', savedCustomer._id);
+      // Save contact to Google Contacts
       try {
-        await createGoogleContact(
-          `${extractedData.customerName} - PNB Customer`,
-          extractedData.mobileNo
-        );
+        await createGoogleContact({
+          customerName: extractedData.customerName,
+          accountNo:    extractedData.accountNo,
+          adharNo:      aadhaarNo,                         // real 12-digit aadhaar
+          mobileNo:     extractedData.mobileNo || null,
+        });
+        console.log('Saved to Google Contacts');
       } catch (err) {
         console.error("Google Contact Error:", err.message);
       }

@@ -103,12 +103,9 @@ export async function POST(request) {
     const customer = await Customer.create(body);
     // Save contact to Google Contacts
       try {
-        await createGoogleContact(
-          `${customer.customerName} - PNB Customer`,
-          customer.mobileNo
-        );
+        await createGoogleContact(customer);
       } catch (err) {
-        console.error("Google Contact Error:", err.message);
+        console.error("Google Contact Error:", err);
       }
     return NextResponse.json({ success: true, customer }, { status: 201 });
   } catch (err) {
