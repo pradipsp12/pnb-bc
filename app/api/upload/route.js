@@ -5,6 +5,7 @@ import Account from '@/lib/models/Account';
 import Customer from '@/lib/models/Customer'; 
 import { extractAccountData } from '@/lib/pdfParser';
 import { appendToGoogleSheet, uploadPdfToDrive } from '@/lib/googleSheets';
+import { createGoogleContact } from "@/lib/google/people";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -86,6 +87,14 @@ export async function POST(request) {
         apy:          apy,               // bool → 'Yes'/'No' enum
       });
       console.log('Saved to Customer collection:', savedCustomer._id);
+      try {
+        await createGoogleContact(
+          `${extractedData.customerName} - PNB Customer`,
+          extractedData.mobileNo
+        );
+      } catch (err) {
+        console.error("Google Contact Error:", err.message);
+      }
     } catch (err) {
       // Don't fail the whole request if customer save fails
       // (e.g. duplicate accountNo if re-uploaded)

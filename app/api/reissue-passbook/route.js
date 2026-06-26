@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import ReissuePassbook  from '@/lib/models/ReissuePassbook';
 import Customer         from '@/lib/models/Customer';
+import { createGoogleContact } from "@/lib/google/people";
 
 // ── Same sanitize pattern as customers API ────────────────────────────────────
 function sanitizeBody(body) {
@@ -103,6 +104,14 @@ export async function POST(request) {
         apy:          body.apy,
       });
       customerStatus = 'added'; // newly added to Customer collection
+      try {
+        await createGoogleContact(
+          `${body.customerName} - PNB Customer`,
+          body.mobileNo
+        );
+      } catch (err) {
+        console.error("Google Contact Error:", err.message);
+      } 
     }
 
     return NextResponse.json(
